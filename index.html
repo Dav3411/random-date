@@ -179,9 +179,9 @@
   }
 
   /* which lines are in the draw */
-  .filter { border-top: 1px solid var(--rule); padding-top: 14px; }
-  .filter summary { cursor: pointer; font-size: .95rem; font-weight: 500; }
-  .filter-body { display: grid; gap: 14px; padding-top: 14px; }
+  .filter { border: 1px solid var(--rule); border-radius: 6px; }
+  .filter summary { cursor: pointer; padding: 12px 14px; font-size: .95rem; font-weight: 500; }
+  .filter-body { display: grid; gap: 14px; padding: 2px 14px 14px; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip {
     min-width: 42px; height: 42px; padding: 0 13px; border-radius: 21px;
@@ -235,6 +235,19 @@
 
     <div class="regions" id="regions"></div>
 
+    <details class="filter" id="filter" hidden>
+      <summary id="filter-summary">뽑을 호선 고르기</summary>
+      <div class="filter-body">
+        <p class="note" id="filter-note" hidden>기본으로는 주요 노선만 켜져 있습니다. 나머지는 눌러서 켜면 함께 뽑힙니다.</p>
+        <div class="chips" id="line-chips"></div>
+        <div class="actions-row">
+          <button id="all-default" class="btn btn-small" type="button" hidden>기본 선택</button>
+          <button id="all-on" class="btn btn-small" type="button">전부 켜기</button>
+          <button id="all-off" class="btn btn-small" type="button">전부 끄기</button>
+        </div>
+      </div>
+    </details>
+
     <div class="sign" id="sign" hidden>
       <div class="sign-top">
         <span class="badge" id="badge" hidden></span>
@@ -264,18 +277,6 @@
       <pre class="copy-text" id="copy-text" hidden></pre>
     </div>
 
-    <details class="filter" id="filter" hidden>
-      <summary id="filter-summary">뽑을 호선 고르기</summary>
-      <div class="filter-body">
-        <p class="note" id="filter-note" hidden>기본으로는 주요 노선만 켜져 있습니다. 나머지는 눌러서 켜면 함께 뽑힙니다.</p>
-        <div class="chips" id="line-chips"></div>
-        <div class="actions-row">
-          <button id="all-default" class="btn btn-small" type="button" hidden>기본 선택</button>
-          <button id="all-on" class="btn btn-small" type="button">전부 켜기</button>
-          <button id="all-off" class="btn btn-small" type="button">전부 끄기</button>
-        </div>
-      </div>
-    </details>
   </main>
 
   <p class="sr-only" id="live" aria-live="polite"></p>
@@ -492,7 +493,7 @@
       if (key === 'line') {
         const on = enabledLines();
         if (!on.length) {
-          setMsg('켜 둔 호선이 없습니다. 아래 "뽑을 호선 고르기"에서 하나 이상 켜 주세요.');
+          setMsg('켜 둔 호선이 없습니다. 위 "뽑을 호선 고르기"에서 하나 이상 켜 주세요.');
           els.filter.open = true;
           return;
         }
