@@ -244,7 +244,6 @@
     <details class="filter" id="filter" open hidden>
       <summary id="filter-summary">뽑을 호선 고르기</summary>
       <div class="filter-body">
-        <p class="note" id="filter-note" hidden>기본으로는 주요 노선만 켜져 있습니다. 나머지는 눌러서 켜면 함께 뽑힙니다.</p>
         <div class="chips" id="line-chips"></div>
         <div class="actions-row">
           <button id="all-default" class="btn btn-small" type="button" hidden>기본 선택</button>
@@ -367,7 +366,7 @@
       draw: $('draw'), next: $('next'), back: $('back'), redraw: $('redraw'), copy: $('copy'), restart: $('restart'),
       toast: $('toast'), copyText: $('copy-text'),
       filter: $('filter'), filterSummary: $('filter-summary'), chips: $('line-chips'),
-      filterNote: $('filter-note'), allDefault: $('all-default'),
+      allDefault: $('all-default'),
       regionBtn: $('region-btn'), choose: $('choose'), actions: $('actions'), live: $('live'),
     };
 
@@ -651,7 +650,6 @@
     function renderFilter() {
       const off = offSet();
       const hasOptional = (region().optional || []).length > 0;
-      els.filterNote.hidden = !hasOptional;
       els.allDefault.hidden = !hasOptional;
       els.chips.replaceChildren(...region().lines.map(l => {
         const b = make('button', 'chip' + (isNum(l) ? ' is-num' : ''), l.short);
