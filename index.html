@@ -267,7 +267,7 @@
     <details class="filter" id="filter" hidden>
       <summary id="filter-summary">뽑을 호선 고르기</summary>
       <div class="filter-body">
-        <p class="note" id="filter-note" hidden>기본으로는 서울 시내를 지나는 노선만 켜져 있습니다. 나머지는 눌러서 켜면 함께 뽑힙니다.</p>
+        <p class="note" id="filter-note" hidden>기본으로는 주요 노선만 켜져 있습니다. 나머지는 눌러서 켜면 함께 뽑힙니다.</p>
         <div class="chips" id="line-chips"></div>
         <div class="actions-row">
           <button id="all-default" class="btn btn-small" type="button" hidden>기본 선택</button>
@@ -287,7 +287,7 @@
     'use strict';
     const $ = id => document.getElementById(id);
     const root = document.documentElement;
-    const KEY = 'random-date-v3';
+    const KEY = 'random-date-v4';
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const regionById = Object.fromEntries(REGIONS.map(r => [r.id, r]));
     const DECKS = { food: FOOD, dessert: DESSERT, play: PLAY };
