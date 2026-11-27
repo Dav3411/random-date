@@ -23,8 +23,15 @@
     --line: var(--idle);
     --on-line: var(--ink);
     --line-stroke: var(--line);
-    --map-bg: #F6F7F6;
-    --map-line: #C4CCCB;
+    /* 그림 지도: 바다, 시 색 다섯 가지, 잉크(선·그림자·글자), 도넛 속 */
+    --map-sea: #CDE7EC;
+    --map-c0: #FFF0BA;
+    --map-c1: #FFD6C0;
+    --map-c2: #D6EDC6;
+    --map-c3: #E4D9F7;
+    --map-c4: #FBD1E1;
+    --map-ink: #2B2440;
+    --map-paper: #FFFDF6;
     --font-display: 'Do Hyeon', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
     --font-body: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
     color-scheme: light;
@@ -38,8 +45,14 @@
       --rule: #2C3842;
       --idle: #4A5863;
       --line-stroke: color-mix(in srgb, var(--line) 72%, #FFFFFF);
-      --map-bg: #182027;
-      --map-line: #364450;
+      --map-sea: #172634;
+      --map-c0: #3E3B28;
+      --map-c1: #47332D;
+      --map-c2: #2B4134;
+      --map-c3: #383152;
+      --map-c4: #48303F;
+      --map-ink: #06080B;
+      --map-paper: #F3EFE4;
       color-scheme: dark;
     }
   }
@@ -97,7 +110,6 @@
   /* the step */
   .step { display: grid; gap: 22px; }
   .step-head { display: grid; gap: 10px; }
-  .step-count { font-size: .85rem; font-weight: 600; letter-spacing: .08em; color: var(--muted); font-variant-numeric: tabular-nums; }
   h1 { margin: 0; font: 400 clamp(3.2rem, 16vw, 5.5rem)/.98 var(--font-display); text-wrap: balance; }
   h1:focus { outline: none; }
   .lede { color: var(--muted); }
@@ -193,10 +205,20 @@
   .filter-body { display: grid; gap: 14px; }
   /* 켜 둔 노선을 실제 지도 위에 그린 그림 */
   .map {
-    position: relative; width: 100%; max-width: 100%; aspect-ratio: 4 / 3;
-    overflow: hidden; border-radius: 4px; border: 1px solid var(--rule); background: var(--map-bg);
+    position: relative; width: calc(100% - 3px); max-width: 100%; aspect-ratio: 4 / 3;
+    overflow: hidden; border-radius: 10px; border: 2px solid var(--ink); background: var(--map-sea);
+    box-shadow: 3px 3px 0 var(--ink);
   }
   .map-lines { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .map-label {
+    font-family: var(--font-display); fill: var(--map-ink); opacity: .4;
+    text-anchor: middle; dominant-baseline: central; pointer-events: none;
+  }
+  .map-label.is-gu { opacity: .34; }
+  @media (prefers-color-scheme: dark) {
+    .map-label { fill: var(--map-paper); opacity: .32; }
+    .map-label.is-gu { opacity: .26; }
+  }
   .map-credit {
     position: absolute; right: 0; bottom: 0; margin: 0; padding: 1px 6px;
     font-size: .62rem; line-height: 1.5; color: var(--muted);
@@ -248,7 +270,6 @@
 
   <main class="step">
     <div class="step-head">
-      <p class="step-count" id="step-count" hidden></p>
       <h1 id="title" tabindex="-1">호선 뽑기</h1>
       <p class="lede" id="lede"></p>
     </div>
@@ -380,7 +401,7 @@
     const save = () => store.set(KEY, state);
 
     const els = {
-      progress: $('progress'), count: $('step-count'), title: $('title'), lede: $('lede'),
+      progress: $('progress'), title: $('title'), lede: $('lede'),
       sign: $('sign'), badge: $('badge'), name: $('sign-name'), band: $('band'),
       left: $('band-left'), order: $('order'), n: $('order-n'), right: $('band-right'),
       note: $('note'), msg: $('msg'), course: $('course'),
@@ -595,13 +616,7 @@
 
     function ledeFor(key) {
       switch (key) {
-        case 'line': {
-          const total = region().lines.length;
-          const on = enabledLines().length;
-          return total === 1
-            ? `${region().name} 지역은 노선이 하나입니다.`
-            : `${region().name}에서 켜 둔 ${on}개 노선 중 하나를 뽑습니다.`;
-        }
+        case 'line': return ''; // 켜 둔 개수는 "뽑을 호선 고르기"에 나옵니다.
         case 'station': return `${curLine().name} 종점에서 몇 번째 역인지 뽑습니다.`;
         case 'done': return '역과 메뉴를 누르면 네이버 지도에서 역 근처를 찾습니다.';
         default: return `${DECKS[key].length}가지 중에서 하나를 뽑습니다.`;
@@ -666,11 +681,11 @@
 
     function updateCount() {
       els.filterCount.textContent = `${region().lines.length}개 중 ${enabledLines().length}개 켜짐`;
-      els.lede.textContent = ledeFor('line');
     }
     /* ---------- 켜 둔 노선 지도 ---------- */
 
-    // 바탕은 시 경계선과 해안선만 그리고, 노선은 그 위에 노선 색으로 그립니다. 확대·이동 없는 그림입니다.
+    // 스티커처럼 그린 그림 지도: 시마다 파스텔 색 덩어리, 시 이름은 흐리게, 서울은 구까지.
+    // 그 위에 켜 둔 노선을 테두리 두른 굵은 선으로 그립니다. 확대·이동 없는 그림입니다.
     const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const mapEls = { box: $('line-map'), svg: $('map-lines') };
     const SVGNS = 'http://www.w3.org/2000/svg';
@@ -693,20 +708,30 @@
       const ends = new Set(line.routes.filter(r => !r.loop).flatMap(r => [r.stations[0], r.stations[r.stations.length - 1]]));
       return [...ends].filter(n => !inner.has(n)).map(n => coordOf(line, n)).filter(Boolean).map(([lat, lon]) => project(lat, lon));
     };
-    // bounds.js의 시 경계선을 [x, y] 목록으로 풉니다. 지역마다 한 번만 풉니다.
-    const boundCache = {};
-    const boundLines = () => {
-      if (typeof BOUNDS === 'undefined' || !BOUNDS[state.region]) return [];
-      return boundCache[state.region] || (boundCache[state.region] = BOUNDS[state.region].map(arr => {
+    // bounds.js(시·구 도형)를 메르카토르 좌표로 풉니다. 지역마다 한 번만 풉니다.
+    const geoCache = {};
+    const P = (lon, lat) => project(lat / 1e4, lon / 1e4);
+    function geoOf(rid) {
+      if (typeof BOUNDS === 'undefined' || !BOUNDS[rid]) return null;
+      if (geoCache[rid]) return geoCache[rid];
+      const B = BOUNDS[rid];
+      const arcs = B.a.map(arr => {
         const pts = [];
         let x = 0, y = 0;
-        for (let i = 0; i < arr.length; i += 2) {
-          x += arr[i]; y += arr[i + 1];
-          pts.push(project(y / 1e4, x / 1e4));
-        }
+        for (let i = 0; i < arr.length; i += 2) { x += arr[i]; y += arr[i + 1]; pts.push(P(x, y)); }
         return pts;
-      }));
-    };
+      });
+      const arcPts = i => (i >= 0 ? arcs[i] : arcs[~i].slice().reverse());
+      const ringPts = ring => ring.flatMap((i, j) => (j ? arcPts(i).slice(1) : arcPts(i)));
+      const place = (name, lx, ly, w, s, e, n) => ({ name, at: P(lx, ly), min: P(w, n), max: P(e, s) });
+      return (geoCache[rid] = {
+        arcs,
+        cities: B.c.map(([name, color, lx, ly, w, s, e, n, rings]) => ({ ...place(name, lx, ly, w, s, e, n), color, rings: rings.map(ringPts) })),
+        borders: B.b.map(i => arcs[i]),
+        gu: B.g.map(i => arcs[i]),
+        guPlaces: B.d.map(([name, lx, ly, w, s, e, n]) => place(name, lx, ly, w, s, e, n)),
+      });
+    }
 
     function renderMap() {
       const box = mapEls.box;
@@ -734,8 +759,8 @@
 
       const svg = mapEls.svg;
       svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-      const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-      const bg = css('--map-bg') || '#fff';
+      const css = name => getComputedStyle(mapEls.box).getPropertyValue(name).trim();
+      const ink = css('--map-ink'), paper = css('--map-paper');
       const el = (tag, attrs) => {
         const node = document.createElementNS(SVGNS, tag);
         for (const [a, v] of Object.entries(attrs)) node.setAttribute(a, v);
@@ -744,31 +769,76 @@
       const line = (pts, attrs) => el('polyline', {
         points: pointsOf(pts), fill: 'none', 'stroke-linejoin': 'round', 'stroke-linecap': 'round', ...attrs,
       });
+      const dOf = (list, close) => list.map(pts => 'M' + pts.map(p => toScreen(p).map(v => v.toFixed(1)).join(' ')).join('L') + (close ? 'Z' : '')).join('');
       const nodes = [];
 
-      // 시 경계와 해안선: 한 path에 모아 가늘게 그립니다.
-      const d = boundLines().map(pts => 'M' + pts.map(p => toScreen(p).map(v => v.toFixed(1)).join(' ')).join('L')).join('');
-      if (d) nodes.push(el('path', { d, fill: 'none', stroke: css('--map-line'), 'stroke-width': 0.8, 'stroke-linejoin': 'round' }));
+      const geo = geoOf(state.region);
+      if (geo) {
+        // 땅 그림자(살짝 어긋난 진한 덩어리) → 시마다 파스텔 색 → 시 경계 → 서울 구 경계(점선)
+        const allRings = geo.cities.flatMap(c => c.rings);
+        nodes.push(el('path', { d: dOf(allRings, true), fill: ink, 'fill-rule': 'evenodd', transform: 'translate(2.5 2.5)' }));
+        const byColor = new Map();
+        for (const c of geo.cities) {
+          if (!byColor.has(c.color)) byColor.set(c.color, []);
+          byColor.get(c.color).push(...c.rings);
+        }
+        for (const [k, rings] of byColor) {
+          const fill = css('--map-c' + (k % 5));
+          nodes.push(el('path', { d: dOf(rings, true), fill, stroke: fill, 'stroke-width': 0.6, 'fill-rule': 'evenodd' }));
+        }
+        nodes.push(el('path', { d: dOf(geo.gu), fill: 'none', stroke: ink, 'stroke-width': 0.9, 'stroke-opacity': 0.45, 'stroke-dasharray': '1.5 2.5', 'stroke-linecap': 'round' }));
+        nodes.push(el('path', { d: dOf(geo.borders), fill: 'none', stroke: ink, 'stroke-width': 1.1, 'stroke-opacity': 0.7, 'stroke-linejoin': 'round' }));
 
-      // 켜 둔 노선만 노선 색으로, 바탕색 테두리를 둘러 겹쳐도 구분되게 그립니다.
-      for (const x of all) if (x.on) for (const p of x.paths) nodes.push(line(p, { stroke: bg, 'stroke-width': 6, 'stroke-opacity': 0.9 }));
+        // 이름은 흐리게, 노선보다 뒤에. 칸에 들어가고 서로 겹치지 않는 것만 적습니다.
+        const placed = [];
+        const labels = [];
+        const tryLabel = (pl, size, cls) => {
+          const [x, y] = toScreen(pl.at);
+          const [x0, y0] = toScreen(pl.min), [x1, y1] = toScreen(pl.max);
+          const tw = pl.name.length * size * 0.92 + 2, th = size * 1.1;
+          if (x1 - x0 < tw || y1 - y0 < th * 1.3) return false;
+          const r = [x - tw / 2, y - th / 2, x + tw / 2, y + th / 2];
+          if (r[0] < 2 || r[1] < 2 || r[2] > W - 2 || r[3] > H - 2) return false;
+          if (placed.some(q => r[0] < q[2] + 3 && r[2] > q[0] - 3 && r[1] < q[3] + 2 && r[3] > q[1] - 2)) return false;
+          placed.push(r);
+          const t = el('text', { x: x.toFixed(1), y: y.toFixed(1), class: cls, 'font-size': size });
+          t.textContent = pl.name;
+          labels.push(t);
+          return true;
+        };
+        const byArea = list => [...list].sort((a, b) =>
+          (b.max[0] - b.min[0]) * (b.max[1] - b.min[1]) - (a.max[0] - a.min[0]) * (a.max[1] - a.min[1]));
+        const guCount = byArea(geo.guPlaces).filter(pl => tryLabel(pl, 10, 'map-label is-gu')).length;
+        for (const c of byArea(geo.cities)) {
+          if (c.name === '서울' && guCount >= 3) continue; // 구 이름이 보이면 "서울"은 생략
+          tryLabel(c, 13, 'map-label');
+        }
+        nodes.push(...labels);
+      }
+
+      // 켜 둔 노선: 진한 테두리 위에 노선 색
+      for (const x of all) if (x.on) for (const p of x.paths) nodes.push(line(p, { stroke: ink, 'stroke-width': 7 }));
       for (const x of all) if (x.on) {
         const g = el('g', {});
         const title = el('title', {});
         title.textContent = x.line.name;
-        g.append(title, ...x.paths.map(p => line(p, { stroke: x.line.color, 'stroke-width': 3.5 })));
+        g.append(title, ...x.paths.map(p => line(p, { stroke: x.line.color, 'stroke-width': 4 })));
         nodes.push(g);
       }
       // 노선의 처음과 끝은 도넛 모양으로 표시합니다.
       for (const x of all) if (x.on) for (const p of terminiOf(x.line)) {
-        const [sx, sy] = toScreen(p);
-        nodes.push(el('circle', { cx: sx.toFixed(1), cy: sy.toFixed(1), r: 4.5, fill: bg, stroke: x.line.color, 'stroke-width': 3 }));
+        const [sx, sy] = toScreen(p).map(v => v.toFixed(1));
+        nodes.push(
+          el('circle', { cx: sx, cy: sy, r: 6.5, fill: ink }),
+          el('circle', { cx: sx, cy: sy, r: 5, fill: x.line.color }),
+          el('circle', { cx: sx, cy: sy, r: 2.3, fill: paper }),
+        );
       }
       const names = all.filter(x => x.on).map(x => x.line.name);
       svg.setAttribute('aria-label', names.length ? `켜 둔 노선 지도: ${names.join(', ')}` : '켜 둔 노선이 없습니다');
       svg.replaceChildren(...nodes);
     }
-    darkQuery.addEventListener('change', () => { if (!els.filter.hidden) renderMap(); }); // 테두리 색이 바뀝니다.
+    darkQuery.addEventListener('change', () => { if (!els.filter.hidden) renderMap(); }); // 지도 색이 바뀝니다.
     let resizeFrame = 0;
     window.addEventListener('resize', () => {
       cancelAnimationFrame(resizeFrame);
@@ -864,9 +934,8 @@
       const drawStep = isDrawStep(i);
       applyLineColor();
       els.title.textContent = STEPS[i].title;
-      els.count.hidden = !drawStep;
-      els.count.textContent = drawStep ? `${i + 1} / 5` : '';
       els.lede.textContent = ledeFor(key);
+      els.lede.hidden = !els.lede.textContent;
 
       // 뽑기 창은 뽑은 결과가 있을 때만 보입니다. (돌아가는 동안은 startRoll이 보여 줍니다.)
       const chooser = chooserShown();
