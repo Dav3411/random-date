@@ -997,6 +997,20 @@
   // 노선 데이터(data.js)와 역 좌표(coords.js)를 불러옵니다. 주소에 이 문서의 수정 시각을 붙여서,
   // 사이트를 새로 올린 직후에 브라우저에 남아 있던 예전 파일이 새 화면과 섞여 쓰이지 않게 합니다.
   // (GitHub Pages는 올릴 때마다 문서의 수정 시각이 바뀝니다.)
+  // GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두게 해서, 새로 올린 직후에도 예전 화면이
+  // 보일 수 있습니다. 서버의 수정 시각이 지금 페이지보다 새로우면 한 번만 새로 불러옵니다.
+  fetch(location.pathname, { method: 'HEAD', cache: 'no-store' }).then(r => {
+    const lm = r.headers.get('last-modified');
+    const server = Date.parse(lm || ''), mine = new Date(document.lastModified).getTime();
+    if (!server || !mine || server - mine < 2000) return;
+    const key = 'random-date-reloaded-for';
+    try {
+      if (sessionStorage.getItem(key) === lm) return; // 이미 한 번 새로 불러왔으면 다시 하지 않음
+      sessionStorage.setItem(key, lm);
+    } catch (e) { return; } // 기록을 못 남기면 반복될 수 있으니 하지 않음
+    location.reload();
+  }).catch(() => {});
+
   (() => {
     const v = encodeURIComponent(document.lastModified);
     const load = src => new Promise((ok, fail) => {
