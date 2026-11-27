@@ -101,7 +101,6 @@
   h1 { margin: 0; font: 400 clamp(3.2rem, 16vw, 5.5rem)/.98 var(--font-display); text-wrap: balance; }
   h1:focus { outline: none; }
   .lede { color: var(--muted); }
-  .note { font-size: .9rem; color: var(--muted); }
   .msg { font-size: .92rem; font-weight: 500; }
 
   /* station sign: every draw result is shown on it */
@@ -256,7 +255,7 @@
   <main class="step">
     <div class="step-head">
       <h1 id="title" tabindex="-1">호선 뽑기</h1>
-      <p class="lede" id="lede"></p>
+      <p class="lede" id="lede" hidden></p>
     </div>
 
     <section class="filter" id="filter" aria-labelledby="filter-title" hidden>
@@ -291,7 +290,6 @@
         <span class="sign-right" id="band-right"></span>
       </div>
     </div>
-    <p class="note" id="note" hidden></p>
     <p class="msg" id="msg" hidden></p>
 
     <ol class="course" id="course" hidden></ol>
@@ -386,10 +384,10 @@
     const save = () => store.set(KEY, state);
 
     const els = {
-      progress: $('progress'), title: $('title'), lede: $('lede'),
+      progress: $('progress'), title: $('title'),
       sign: $('sign'), badge: $('badge'), name: $('sign-name'), band: $('band'),
       left: $('band-left'), order: $('order'), n: $('order-n'), right: $('band-right'),
-      note: $('note'), msg: $('msg'), course: $('course'),
+      msg: $('msg'), course: $('course'),
       draw: $('draw'), next: $('next'), back: $('back'), redraw: $('redraw'), copy: $('copy'), restart: $('restart'),
       toast: $('toast'), copyText: $('copy-text'),
       filter: $('filter'), filterCount: $('filter-count'), chips: $('line-chips'),
@@ -399,9 +397,6 @@
 
     const mapUrl = q => 'https://map.naver.com/p/search/' + encodeURIComponent(q);
     const countOf = s => `${s.loop ? s.origin : s.origin + '에서'} ${s.n}번째`;
-    const noteOf = (line, s) => (s.loop
-      ? `${line.name} ${s.origin} ${s.n}번째 역입니다. 순환선은 종점이 없어서 ${stationLabel(s.first)}을 1번째로 셉니다. (${s.len}개 역)`
-      : `${line.name} ${s.origin}에서 ${s.n}번째 역입니다. 종점을 1번째로 세고, ${stationLabel(s.first)}~${stationLabel(s.last)} ${s.len}개 역 중에서 뽑았습니다.`);
     const setMsg = text => { els.msg.textContent = text || ''; els.msg.hidden = !text; };
     const announce = text => { els.live.textContent = text; };
     const isNum = line => /^\d+$/.test(line.short);
@@ -504,7 +499,6 @@
         },
       };
       els.sign.classList.add('is-rolling');
-      els.note.hidden = true;
       const wasChoosing = !els.filter.hidden;
       choosing = false;
       els.filter.hidden = true;
@@ -598,15 +592,6 @@
     }
 
     /* ---------- 화면 그리기 ---------- */
-
-    function ledeFor(key) {
-      switch (key) {
-        case 'line': return ''; // 켜 둔 개수는 "뽑을 호선 고르기"에 나옵니다.
-        case 'station': return `${curLine().name} 종점에서 몇 번째 역인지 뽑습니다.`;
-        case 'done': return '역과 메뉴를 누르면 네이버 지도에서 역 근처를 찾습니다.';
-        default: return `${DECKS[key].length}가지 중에서 하나를 뽑습니다.`;
-      }
-    }
 
     function applyLineColor() {
       const line = curLine();
@@ -913,8 +898,6 @@
       const drawStep = isDrawStep(i);
       applyLineColor();
       els.title.textContent = STEPS[i].title;
-      els.lede.textContent = ledeFor(key);
-      els.lede.hidden = !els.lede.textContent;
 
       // 뽑기 창은 뽑은 결과가 있을 때만 보입니다. (돌아가는 동안은 startRoll이 보여 줍니다.)
       const chooser = chooserShown();
@@ -924,9 +907,6 @@
       els.actions.classList.toggle('is-docked', chooser);
       els.copyText.hidden = true;
 
-      const showNote = key === 'station' && !!state.station;
-      els.note.hidden = !showNote;
-      els.note.textContent = showNote ? noteOf(curLine(), state.station) : '';
 
       if (drawStep) paintSign(signFor(key));
       if (chooser) renderFilter();
@@ -1032,7 +1012,9 @@
       // 좌표·경계가 없으면 지도만 빠지거나 바탕선 없이 그려지고, 뽑기는 그대로 됩니다.
       .then(() => Promise.all([load('coords.js'), load('bounds.js')].map(p => p.catch(() => {}))))
       .then(start, () => {
-        document.getElementById('lede').textContent = '노선 데이터를 불러오지 못했습니다. 새로고침해 주세요.';
+        const lede = document.getElementById('lede');
+        lede.textContent = '노선 데이터를 불러오지 못했습니다. 새로고침해 주세요.';
+        lede.hidden = false;
       });
   })();
 </script>
