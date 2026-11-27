@@ -23,15 +23,9 @@
     --line: var(--idle);
     --on-line: var(--ink);
     --line-stroke: var(--line);
-    /* 그림 지도: 바다, 시 색 다섯 가지, 잉크(선·그림자·글자), 도넛 속 */
-    --map-sea: #CDE7EC;
-    --map-c0: #FFF0BA;
-    --map-c1: #FFD6C0;
-    --map-c2: #D6EDC6;
-    --map-c3: #E4D9F7;
-    --map-c4: #FBD1E1;
-    --map-ink: #2B2440;
-    --map-paper: #FFFDF6;
+    /* 노선 지도: 흰 바탕에 얇은 시 경계 */
+    --map-bg: #F6F7F6;
+    --map-line: #C4CCCB;
     --font-display: 'Do Hyeon', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
     --font-body: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
     color-scheme: light;
@@ -45,14 +39,8 @@
       --rule: #2C3842;
       --idle: #4A5863;
       --line-stroke: color-mix(in srgb, var(--line) 72%, #FFFFFF);
-      --map-sea: #172634;
-      --map-c0: #3E3B28;
-      --map-c1: #47332D;
-      --map-c2: #2B4134;
-      --map-c3: #383152;
-      --map-c4: #48303F;
-      --map-ink: #06080B;
-      --map-paper: #F3EFE4;
+      --map-bg: #182027;
+      --map-line: #364450;
       color-scheme: dark;
     }
   }
@@ -205,20 +193,16 @@
   .filter-body { display: grid; gap: 14px; }
   /* 켜 둔 노선을 실제 지도 위에 그린 그림 */
   .map {
-    position: relative; width: calc(100% - 3px); max-width: 100%; aspect-ratio: 4 / 3;
-    overflow: hidden; border-radius: 10px; border: 2px solid var(--ink); background: var(--map-sea);
-    box-shadow: 3px 3px 0 var(--ink);
+    position: relative; width: 100%; max-width: 100%; aspect-ratio: 4 / 3;
+    overflow: hidden; border-radius: 4px; border: 1px solid var(--rule); background: var(--map-bg);
   }
   .map-lines { position: absolute; inset: 0; width: 100%; height: 100%; }
+  /* 시·구 이름은 노선 뒤에 흐리게 */
   .map-label {
-    font-family: var(--font-display); fill: var(--map-ink); opacity: .4;
+    font-family: var(--font-display); fill: var(--ink); opacity: .22;
     text-anchor: middle; dominant-baseline: central; pointer-events: none;
   }
-  .map-label.is-gu { opacity: .34; }
-  @media (prefers-color-scheme: dark) {
-    .map-label { fill: var(--map-paper); opacity: .32; }
-    .map-label.is-gu { opacity: .26; }
-  }
+  .map-label.is-gu { opacity: .2; }
   .map-credit {
     position: absolute; right: 0; bottom: 0; margin: 0; padding: 1px 6px;
     font-size: .62rem; line-height: 1.5; color: var(--muted);
@@ -686,8 +670,8 @@
     }
     /* ---------- 켜 둔 노선 지도 ---------- */
 
-    // 스티커처럼 그린 그림 지도: 시마다 파스텔 색 덩어리, 시 이름은 흐리게, 서울은 구까지.
-    // 그 위에 켜 둔 노선을 테두리 두른 굵은 선으로 그립니다. 확대·이동 없는 그림입니다.
+    // 흰 바탕에 시 경계(서울은 구 경계까지)를 얇게 긋고, 시·구 이름은 흐리게 깝니다.
+    // 그 위에 켜 둔 노선을 노선 색으로, 종점은 속이 빈 도넛으로 그립니다. 확대·이동 없는 그림입니다.
     const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const mapEls = { box: $('line-map'), svg: $('map-lines') };
     const SVGNS = 'http://www.w3.org/2000/svg';
@@ -762,7 +746,7 @@
       const svg = mapEls.svg;
       svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
       const css = name => getComputedStyle(mapEls.box).getPropertyValue(name).trim();
-      const ink = css('--map-ink'), paper = css('--map-paper');
+      const bg = css('--map-bg'), edge = css('--map-line');
       const el = (tag, attrs) => {
         const node = document.createElementNS(SVGNS, tag);
         for (const [a, v] of Object.entries(attrs)) node.setAttribute(a, v);
@@ -776,20 +760,9 @@
 
       const geo = geoOf(state.region);
       if (geo) {
-        // 땅 그림자(살짝 어긋난 진한 덩어리) → 시마다 파스텔 색 → 시 경계 → 서울 구 경계(점선)
-        const allRings = geo.cities.flatMap(c => c.rings);
-        nodes.push(el('path', { d: dOf(allRings, true), fill: ink, 'fill-rule': 'evenodd', transform: 'translate(2.5 2.5)' }));
-        const byColor = new Map();
-        for (const c of geo.cities) {
-          if (!byColor.has(c.color)) byColor.set(c.color, []);
-          byColor.get(c.color).push(...c.rings);
-        }
-        for (const [k, rings] of byColor) {
-          const fill = css('--map-c' + (k % 5));
-          nodes.push(el('path', { d: dOf(rings, true), fill, stroke: fill, 'stroke-width': 0.6, 'fill-rule': 'evenodd' }));
-        }
-        nodes.push(el('path', { d: dOf(geo.gu), fill: 'none', stroke: ink, 'stroke-width': 0.9, 'stroke-opacity': 0.45, 'stroke-dasharray': '1.5 2.5', 'stroke-linecap': 'round' }));
-        nodes.push(el('path', { d: dOf(geo.borders), fill: 'none', stroke: ink, 'stroke-width': 1.1, 'stroke-opacity': 0.7, 'stroke-linejoin': 'round' }));
+        // 서울 구 경계는 더 가늘게, 시 경계와 해안선은 얇게
+        nodes.push(el('path', { d: dOf(geo.gu), fill: 'none', stroke: edge, 'stroke-width': 0.5, 'stroke-linejoin': 'round' }));
+        nodes.push(el('path', { d: dOf(geo.borders), fill: 'none', stroke: edge, 'stroke-width': 0.8, 'stroke-linejoin': 'round' }));
 
         // 이름은 흐리게, 노선보다 뒤에. 칸에 들어가고 서로 겹치지 않는 것만 적습니다.
         const placed = [];
@@ -818,23 +791,19 @@
         nodes.push(...labels);
       }
 
-      // 켜 둔 노선: 진한 테두리 위에 노선 색
-      for (const x of all) if (x.on) for (const p of x.paths) nodes.push(line(p, { stroke: ink, 'stroke-width': 7 }));
+      // 켜 둔 노선: 바탕색 테두리를 둘러 겹쳐도 구분되게
+      for (const x of all) if (x.on) for (const p of x.paths) nodes.push(line(p, { stroke: bg, 'stroke-width': 6, 'stroke-opacity': 0.9 }));
       for (const x of all) if (x.on) {
         const g = el('g', {});
         const title = el('title', {});
         title.textContent = x.line.name;
-        g.append(title, ...x.paths.map(p => line(p, { stroke: x.line.color, 'stroke-width': 4 })));
+        g.append(title, ...x.paths.map(p => line(p, { stroke: x.line.color, 'stroke-width': 3.5 })));
         nodes.push(g);
       }
-      // 노선의 처음과 끝은 도넛 모양으로 표시합니다.
+      // 노선의 처음과 끝은 가운데가 빈 도넛으로 표시합니다.
       for (const x of all) if (x.on) for (const p of terminiOf(x.line)) {
         const [sx, sy] = toScreen(p).map(v => v.toFixed(1));
-        nodes.push(
-          el('circle', { cx: sx, cy: sy, r: 6.5, fill: ink }),
-          el('circle', { cx: sx, cy: sy, r: 5, fill: x.line.color }),
-          el('circle', { cx: sx, cy: sy, r: 2.3, fill: paper }),
-        );
+        nodes.push(el('circle', { cx: sx, cy: sy, r: 4.5, fill: bg, stroke: x.line.color, 'stroke-width': 3 }));
       }
       const names = all.filter(x => x.on).map(x => x.line.name);
       svg.setAttribute('aria-label', names.length ? `켜 둔 노선 지도: ${names.join(', ')}` : '켜 둔 노선이 없습니다');
