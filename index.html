@@ -10,9 +10,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
 <style>
-  /* Layout: one narrow column that shows a single step at a time. A small route line of five
-     stops across the top tracks progress; below it the step's big title, one station-sign card
-     for the draw, and the action. Picked choices collect in a quiet list at the bottom. */
+  /* Layout: one narrow column that shows a single step at a time. A route line of five stops
+     across the top tracks progress and carries each picked choice under its stop; below it the
+     step's big title, one station-sign card for the draw, and the action. */
   :root {
     --bg: #EDF0EF;
     --surface: #FFFFFF;
@@ -59,9 +59,16 @@
 
   /* top bar: site name + progress route */
   .bar { display: grid; gap: 18px; }
+  .bar-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
   .brand { font: 400 1.2rem/1 var(--font-display); letter-spacing: .02em; }
+  .region-btn {
+    border: 0; background: transparent; padding: 4px 0; cursor: pointer;
+    color: var(--muted); font: 500 .85rem/1.2 var(--font-body);
+    text-decoration: underline; text-underline-offset: 3px;
+  }
+  .region-btn:hover { color: var(--ink); }
   .progress { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  .progress li { position: relative; display: grid; justify-items: center; }
+  .progress li { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
   .progress li + li::before {
     content: ""; position: absolute; top: 8px; right: 50%; width: 100%; height: 5px;
     background: var(--rule); transition: background-color .35s;
@@ -69,9 +76,15 @@
   .progress li.is-reached::before { background: var(--line-stroke); }
   .stopbtn {
     position: relative; z-index: 1;
-    display: grid; justify-items: center; gap: 6px;
-    padding: 0 2px; border: 0; background: transparent;
-    color: var(--muted); font: 500 .78rem/1.2 var(--font-body); cursor: pointer;
+    display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 5px;
+    width: 100%; padding: 0 2px; border: 0; background: transparent;
+    color: var(--muted); font: 500 .78rem/1.2 var(--font-body); text-align: center; cursor: pointer;
+  }
+  /* 뽑힌 선택지는 각 정거장 아래에 적습니다. 두 줄 높이를 미리 잡아 화면이 덜 움직이게 합니다. */
+  .stop-value {
+    min-height: 2.5em; max-width: 100%;
+    color: var(--ink); font: 600 .8rem/1.25 var(--font-body);
+    word-break: keep-all; overflow-wrap: anywhere;
   }
   .stopbtn::before {
     content: ""; width: 21px; height: 21px; border-radius: 50%;
@@ -80,7 +93,7 @@
   }
   .is-done .stopbtn::before { background: var(--line-stroke); border-color: var(--line-stroke); }
   .is-current .stopbtn::before { border-color: var(--ink); }
-  .is-current .stopbtn { color: var(--ink); font-weight: 600; }
+  .is-current .stop-label { color: var(--ink); font-weight: 600; }
   .stopbtn[aria-disabled="true"] { cursor: default; }
 
   /* the step */
@@ -189,20 +202,12 @@
   .course .v a { color: var(--ink); text-underline-offset: 4px; text-decoration-thickness: 1.5px; }
   .course .v small { font: 400 .85rem/1.4 var(--font-body); color: var(--muted); }
 
-  /* picked choices so far */
-  .picked { border-top: 2px solid var(--ink); padding-top: 16px; display: grid; gap: 12px; }
-  .picked-list { margin: 0; display: grid; gap: 8px; }
-  .picked-row { display: grid; grid-template-columns: 4.2em minmax(0, 1fr); gap: 10px; align-items: baseline; }
-  .picked-row dt { font-size: .82rem; font-weight: 600; color: var(--muted); }
-  .picked-row dd { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-weight: 500; }
-  .picked-row small { font-size: .82rem; font-weight: 400; color: var(--muted); }
   .dot {
-    flex: none; align-self: center; width: 22px; height: 22px; border-radius: 50%;
+    flex: none; align-self: center; width: 28px; height: 28px; border-radius: 50%;
     display: inline-grid; place-items: center;
     background: var(--c); color: var(--on);
-    font: 400 .9rem/1 var(--font-display);
+    font: 400 1.15rem/1 var(--font-display);
   }
-  .course .dot { width: 28px; height: 28px; font-size: 1.15rem; }
 
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
@@ -212,8 +217,11 @@
 <body>
 <div class="wrap">
   <header class="bar">
-    <p class="brand">랜덤 데이트</p>
-    <nav aria-label="뽑는 순서">
+    <div class="bar-top">
+      <p class="brand">랜덤 데이트</p>
+      <button class="region-btn" id="region-btn" type="button" hidden></button>
+    </div>
+    <nav aria-label="뽑힌 선택지">
       <ol class="progress" id="progress"></ol>
     </nav>
   </header>
@@ -259,8 +267,10 @@
     <details class="filter" id="filter" hidden>
       <summary id="filter-summary">뽑을 호선 고르기</summary>
       <div class="filter-body">
+        <p class="note" id="filter-note" hidden>기본으로는 서울 시내를 지나는 노선만 켜져 있습니다. 나머지는 눌러서 켜면 함께 뽑힙니다.</p>
         <div class="chips" id="line-chips"></div>
         <div class="actions-row">
+          <button id="all-default" class="btn btn-small" type="button" hidden>기본 선택</button>
           <button id="all-on" class="btn btn-small" type="button">전부 켜기</button>
           <button id="all-off" class="btn btn-small" type="button">전부 끄기</button>
         </div>
@@ -268,10 +278,6 @@
     </details>
   </main>
 
-  <section class="picked" id="picked" aria-labelledby="picked-h" hidden>
-    <h2 id="picked-h" class="label">뽑힌 선택지</h2>
-    <dl class="picked-list" id="picked-list"></dl>
-  </section>
   <p class="sr-only" id="live" aria-live="polite"></p>
 </div>
 
@@ -281,7 +287,7 @@
     'use strict';
     const $ = id => document.getElementById(id);
     const root = document.documentElement;
-    const KEY = 'random-date-v2';
+    const KEY = 'random-date-v3';
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const regionById = Object.fromEntries(REGIONS.map(r => [r.id, r]));
     const DECKS = { food: FOOD, dessert: DESSERT, play: PLAY };
@@ -309,7 +315,8 @@
 
     const region = () => regionById[state.region];
     const curLine = () => region().lines.find(l => l.id === state.line) || null;
-    const offSet = () => new Set(state.off[state.region] || []);
+    // 직접 고른 적이 없는 지역은 기본 선택(optional 노선은 꺼 둠)을 씁니다.
+    const offSet = () => new Set(state.off[state.region] || region().optional || []);
     const enabledLines = () => { const off = offSet(); return region().lines.filter(l => !off.has(l.id)); };
     const itemOf = key => DECKS[key].find(i => i.label === state[key]) || null;
     // 앞 단계를 뽑아야 다음 단계로 갈 수 있습니다.
@@ -352,7 +359,8 @@
       draw: $('draw'), next: $('next'), back: $('back'), redraw: $('redraw'), copy: $('copy'), restart: $('restart'),
       toast: $('toast'), copyText: $('copy-text'),
       filter: $('filter'), filterSummary: $('filter-summary'), chips: $('line-chips'),
-      picked: $('picked'), pickedList: $('picked-list'), live: $('live'),
+      filterNote: $('filter-note'), allDefault: $('all-default'),
+      regionBtn: $('region-btn'), live: $('live'),
     };
 
     const mapUrl = q => 'https://map.naver.com/p/search/' + encodeURIComponent(q);
@@ -552,12 +560,22 @@
       }
     }
 
+    // 상단 노선도: 정거장마다 뽑힌 선택지를 적습니다.
+    function stopValue(key) {
+      if (key === 'line') { const line = curLine(); return line ? line.name : ''; }
+      if (key === 'station') return state.station ? stationLabel(state.station.name) : '';
+      return state[key] || '';
+    }
     function renderProgress() {
+      els.regionBtn.hidden = state.step === 0;
+      els.regionBtn.textContent = `지역: ${region().name}`;
       els.progress.replaceChildren(...[1, 2, 3, 4, 5].map(i => {
-        const picked = !!state[STEPS[i].key];
+        const value = stopValue(STEPS[i].key);
+        const picked = !!value;
         const current = state.step === i;
         const li = make('li', [current && 'is-current', picked && !current && 'is-done', (picked || current) && 'is-reached'].filter(Boolean).join(' '));
-        const b = make('button', 'stopbtn', STEPS[i].short);
+        const b = make('button', 'stopbtn');
+        b.append(make('span', 'stop-label', STEPS[i].short), make('span', 'stop-value', value));
         b.type = 'button';
         b.setAttribute('aria-disabled', String(!reachable(i)));
         if (current) b.setAttribute('aria-current', 'step');
@@ -590,6 +608,9 @@
     }
     function renderFilter() {
       const off = offSet();
+      const hasOptional = (region().optional || []).length > 0;
+      els.filterNote.hidden = !hasOptional;
+      els.allDefault.hidden = !hasOptional;
       els.chips.replaceChildren(...region().lines.map(l => {
         const b = make('button', 'chip' + (isNum(l) ? ' is-num' : ''), l.short);
         b.type = 'button';
@@ -616,30 +637,15 @@
       setMsg('');
       renderFilter();
     };
+    els.allDefault.addEventListener('click', () => {
+      delete state.off[state.region];
+      save();
+      setMsg('');
+      renderFilter();
+    });
+    els.regionBtn.addEventListener('click', () => go(0));
     $('all-on').addEventListener('click', () => setAllLines(true));
     $('all-off').addEventListener('click', () => setAllLines(false));
-
-    function renderPicked() {
-      const rows = [];
-      const row = (k, ...v) => {
-        const d = make('div', 'picked-row');
-        const dd = make('dd');
-        dd.append(...v);
-        d.append(make('dt', null, k), dd);
-        rows.push(d);
-      };
-      if (isDrawStep(state.step)) {
-        row('지역', region().name);
-        const line = curLine();
-        if (line) row('호선', dot(line), line.name);
-        if (state.station) row('역', stationLabel(state.station.name), make('small', null, countOf(state.station)));
-        for (const k of ['food', 'dessert', 'play']) {
-          if (state[k]) row(STEPS.find(s => s.key === k).short, state[k]);
-        }
-      }
-      els.pickedList.replaceChildren(...rows);
-      els.picked.hidden = !rows.length;
-    }
 
     function renderCourse() {
       const line = curLine();
@@ -704,7 +710,6 @@
       if (key === 'line') renderFilter();
       if (key === 'done') renderCourse();
       renderProgress();
-      renderPicked();
       syncActions();
     }
 
