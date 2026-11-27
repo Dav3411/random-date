@@ -53,7 +53,7 @@
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
   }
-  .wrap { max-width: 560px; margin-inline: auto; display: grid; gap: 40px; }
+  .wrap { max-width: 560px; margin-inline: auto; display: grid; gap: 20px; }
   p { margin: 0; word-break: keep-all; overflow-wrap: anywhere; }
   :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -63,12 +63,6 @@
   .bar { display: grid; gap: 18px; }
   .bar-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
   .brand { font: 400 1.2rem/1 var(--font-display); letter-spacing: .02em; }
-  .region-btn {
-    border: 0; background: transparent; padding: 4px 0; cursor: pointer;
-    color: var(--muted); font: 500 .85rem/1.2 var(--font-body);
-    text-decoration: underline; text-underline-offset: 3px;
-  }
-  .region-btn:hover { color: var(--ink); }
   .progress { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .progress li { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
   .progress li + li::before {
@@ -82,9 +76,9 @@
     width: 100%; padding: 0 2px; border: 0; background: transparent;
     color: var(--muted); font: 500 .78rem/1.2 var(--font-body); text-align: center; cursor: pointer;
   }
-  /* 뽑힌 선택지는 각 정거장 아래에 적습니다. 두 줄 높이를 미리 잡아 화면이 덜 움직이게 합니다. */
+  /* 뽑힌 선택지는 각 정거장 아래에 적습니다. 한 줄 높이를 미리 잡아 화면이 덜 움직이게 합니다. */
   .stop-value {
-    min-height: 2.5em; max-width: 100%;
+    min-height: 1.25em; max-width: 100%;
     color: var(--ink); font: 600 .8rem/1.25 var(--font-body);
     word-break: keep-all; overflow-wrap: anywhere;
   }
@@ -107,21 +101,6 @@
   .lede { color: var(--muted); }
   .note { font-size: .9rem; color: var(--muted); }
   .msg { font-size: .92rem; font-weight: 500; }
-
-  /* region choices */
-  .regions { display: grid; gap: 10px; }
-  .region {
-    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 12px;
-    width: 100%; text-align: left; padding: 15px 18px;
-    background: var(--surface); color: var(--ink);
-    border: 1.5px solid var(--rule); border-radius: 6px;
-    font: inherit; cursor: pointer;
-  }
-  .region:hover { border-color: var(--ink); }
-  .region[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
-  .region-name { font: 400 1.75rem/1.15 var(--font-display); }
-  .region-count { font-size: .88rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .region-sub { grid-column: 1 / -1; font-size: .85rem; color: var(--muted); }
 
   /* station sign: every draw result is shown on it */
   .sign { background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; padding-bottom: 20px; }
@@ -167,7 +146,6 @@
   .btn:active { transform: translateY(1px); }
   .btn-primary { width: 100%; background: var(--ink); color: var(--bg); font-size: 1.2rem; font-weight: 600; padding: 19px 20px; border-radius: 8px; }
   .btn-primary:hover { opacity: .86; }
-  .btn-small { padding: 9px 12px; font-size: .88rem; }
   .btn[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
   .btn[aria-disabled="true"]:active { transform: none; }
   .actions { display: grid; gap: 10px; }
@@ -187,9 +165,30 @@
   }
 
   /* which lines are in the draw */
-  .filter { border: 1px solid var(--rule); border-radius: 6px; }
-  .filter summary { cursor: pointer; padding: 12px 14px; font-size: .95rem; font-weight: 500; }
-  .filter-body { display: grid; gap: 14px; padding: 2px 14px 14px; }
+  .filter { border: 1px solid var(--rule); border-radius: 6px; display: grid; gap: 12px; padding: 12px 14px 14px; }
+  .filter-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .filter-heading { display: grid; gap: 1px; min-width: 0; }
+  .filter-title { margin: 0; font: 600 .95rem/1.3 var(--font-body); }
+  .filter-count { font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .mini-actions { flex: none; display: flex; gap: 6px; }
+  .btn-mini {
+    font: 500 .78rem/1 var(--font-body); color: var(--ink); background: transparent;
+    border: 1px solid var(--rule); border-radius: 999px; padding: 6px 10px; cursor: pointer;
+  }
+  .btn-mini:hover { border-color: var(--ink); }
+  /* 지역 탭: 한 번에 한 지역에서만 뽑습니다. */
+  .tabs {
+    display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
+    margin-inline: -14px; padding-inline: 14px; border-bottom: 1px solid var(--rule);
+  }
+  .tab {
+    flex: none; margin-bottom: -1px; padding: 8px 10px 9px;
+    border: 0; border-bottom: 2px solid transparent; background: transparent;
+    color: var(--muted); font: 500 .9rem/1.2 var(--font-body); cursor: pointer;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab[aria-selected="true"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
+  .filter-body { display: grid; gap: 14px; }
   /* 켜 둔 노선을 실제 지도 위에 그린 그림 */
   .map {
     position: relative; width: 100%; max-width: 100%; aspect-ratio: 4 / 3;
@@ -245,7 +244,6 @@
   <header class="bar">
     <div class="bar-top">
       <p class="brand">랜덤 데이트</p>
-      <button class="region-btn" id="region-btn" type="button" hidden></button>
     </div>
     <nav aria-label="뽑힌 선택지">
       <ol class="progress" id="progress"></ol>
@@ -255,28 +253,31 @@
   <main class="step">
     <div class="step-head">
       <p class="step-count" id="step-count" hidden></p>
-      <h1 id="title" tabindex="-1">지역 고르기</h1>
-      <p class="lede" id="lede">한 번에 한 지역에서만 뽑습니다.</p>
+      <h1 id="title" tabindex="-1">호선 뽑기</h1>
+      <p class="lede" id="lede"></p>
     </div>
 
-    <div class="regions" id="regions"></div>
-
-    <details class="filter" id="filter" open hidden>
-      <summary id="filter-summary">뽑을 호선 고르기</summary>
-      <div class="filter-body">
+    <section class="filter" id="filter" aria-labelledby="filter-title" hidden>
+      <div class="filter-head">
+        <div class="filter-heading">
+          <h2 class="filter-title" id="filter-title">뽑을 호선 고르기</h2>
+          <p class="filter-count" id="filter-count"></p>
+        </div>
+        <div class="mini-actions">
+          <button id="all-on" class="btn-mini" type="button">전부 켜기</button>
+          <button id="all-off" class="btn-mini" type="button">전부 끄기</button>
+        </div>
+      </div>
+      <div class="tabs" id="region-tabs" role="tablist" aria-label="지역"></div>
+      <div class="filter-body" id="region-panel" role="tabpanel">
         <div class="map" id="line-map" hidden>
           <div class="map-tiles" id="map-tiles"></div>
           <svg class="map-lines" id="map-lines" role="img" aria-label="켜 둔 노선 지도"></svg>
           <p class="map-credit">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 기여자</p>
         </div>
         <div class="chips" id="line-chips"></div>
-        <div class="actions-row">
-          <button id="all-default" class="btn btn-small" type="button" hidden>기본 선택</button>
-          <button id="all-on" class="btn btn-small" type="button">전부 켜기</button>
-          <button id="all-off" class="btn btn-small" type="button">전부 끄기</button>
-        </div>
       </div>
-    </details>
+    </section>
 
     <div class="sign" id="sign" hidden>
       <div class="sign-top">
@@ -319,14 +320,14 @@
     'use strict';
     const $ = id => document.getElementById(id);
     const root = document.documentElement;
-    const KEY = 'random-date-v4';
+    const KEY = 'random-date-v5';
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const regionById = Object.fromEntries(REGIONS.map(r => [r.id, r]));
     const DECKS = { food: FOOD, dessert: DESSERT, play: PLAY };
 
-    // 화면은 한 번에 한 단계만 보여 줍니다. 1~5번이 뽑는 단계입니다.
+    // 화면은 한 번에 한 단계만 보여 줍니다. 0~4번이 뽑는 단계, 마지막이 코스입니다.
+    // 지역은 호선 뽑기 단계의 "뽑을 호선 고르기" 탭에서 고릅니다.
     const STEPS = [
-      { key: 'region', title: '지역 고르기' },
       { key: 'line', title: '호선 뽑기', short: '호선' },
       { key: 'station', title: '역 뽑기', short: '역' },
       { key: 'food', title: '밥 뽑기', short: '밥' },
@@ -335,7 +336,7 @@
       { key: 'done', title: '오늘의 코스' },
     ];
     const DONE = STEPS.length - 1;
-    const isDrawStep = i => i >= 1 && i < DONE;
+    const isDrawStep = i => i >= 0 && i < DONE;
 
     // 이 브라우저에만 기억합니다. 저장소를 못 쓰는 환경에서도 그대로 동작합니다.
     const store = {
@@ -353,7 +354,7 @@
     const itemOf = key => DECKS[key].find(i => i.label === state[key]) || null;
     // 앞 단계를 뽑아야 다음 단계로 갈 수 있습니다.
     function reachable(i) {
-      if (i <= 1) return true;
+      if (i <= 0) return true;
       return !!state[STEPS[i - 1].key] && reachable(i - 1);
     }
 
@@ -385,14 +386,14 @@
 
     const els = {
       progress: $('progress'), count: $('step-count'), title: $('title'), lede: $('lede'),
-      regions: $('regions'), sign: $('sign'), badge: $('badge'), name: $('sign-name'), band: $('band'),
+      sign: $('sign'), badge: $('badge'), name: $('sign-name'), band: $('band'),
       left: $('band-left'), order: $('order'), n: $('order-n'), right: $('band-right'),
       note: $('note'), msg: $('msg'), course: $('course'),
       draw: $('draw'), next: $('next'), back: $('back'), redraw: $('redraw'), copy: $('copy'), restart: $('restart'),
       toast: $('toast'), copyText: $('copy-text'),
-      filter: $('filter'), filterSummary: $('filter-summary'), chips: $('line-chips'),
-      allDefault: $('all-default'),
-      regionBtn: $('region-btn'), choose: $('choose'), actions: $('actions'), live: $('live'),
+      filter: $('filter'), filterCount: $('filter-count'), chips: $('line-chips'),
+      tabs: $('region-tabs'), panel: $('region-panel'),
+      choose: $('choose'), actions: $('actions'), live: $('live'),
     };
 
     const mapUrl = q => 'https://map.naver.com/p/search/' + encodeURIComponent(q);
@@ -471,8 +472,7 @@
     let choosing = false;    // 호선을 뽑은 뒤 "호선 목록"으로 다시 목록을 보는 중
 
     // 호선 단계는 뽑기 전에는 호선 목록만, 뽑기 시작 후에는 뽑기 창만 보여 줍니다.
-    const hasLineChooser = () => region().lines.length > 1;
-    const chooserShown = () => STEPS[state.step].key === 'line' && !rolling && hasLineChooser() && (!state.line || choosing);
+    const chooserShown = () => STEPS[state.step].key === 'line' && !rolling && (!state.line || choosing);
 
     // 뽑기를 누르면 후보가 계속 돌아가고, 한 번 더 누르면 그때 보이던 것으로 정해집니다.
     function startRoll(pool, show, commit) {
@@ -584,24 +584,22 @@
       els.title.focus({ preventScroll: true });
     }
 
-    function chooseRegion(id) {
-      if (busy) return;
-      if (id !== state.region) {
-        state.region = id;
-        state.line = null;
-        state.station = null;
-      }
-      go(1);
+    // 지역을 바꾸면 그 지역 노선으로 다시 뽑아야 하므로 뽑아 둔 호선과 역은 지웁니다.
+    function selectRegion(id, focusTab) {
+      if (busy || id === state.region || !regionById[id]) return;
+      state.region = id;
+      state.line = null;
+      state.station = null;
+      save();
+      setMsg('');
+      render();
+      if (focusTab) $('tab-' + id).focus();
     }
 
     /* ---------- 화면 그리기 ---------- */
 
     function ledeFor(key) {
       switch (key) {
-        case 'region':
-          return state.line
-            ? '한 번에 한 지역에서만 뽑습니다. 지역을 바꾸면 뽑아 둔 호선과 역은 지워집니다.'
-            : '한 번에 한 지역에서만 뽑습니다.';
         case 'line': {
           const total = region().lines.length;
           const on = enabledLines().length;
@@ -633,9 +631,7 @@
       return state[key] || '';
     }
     function renderProgress() {
-      els.regionBtn.hidden = state.step === 0;
-      els.regionBtn.textContent = `지역: ${region().name}`;
-      els.progress.replaceChildren(...[1, 2, 3, 4, 5].map(i => {
+      els.progress.replaceChildren(...[0, 1, 2, 3, 4].map(i => {
         const value = stopValue(STEPS[i].key);
         const picked = !!value;
         const current = state.step === i;
@@ -651,25 +647,30 @@
       }));
     }
 
-    function renderRegions() {
-      els.regions.replaceChildren(...REGIONS.map(r => {
-        const b = make('button', 'region');
+    function renderTabs() {
+      els.tabs.replaceChildren(...REGIONS.map((r, i) => {
+        const selected = r.id === state.region;
+        const b = make('button', 'tab', r.name);
         b.type = 'button';
-        b.setAttribute('aria-pressed', String(r.id === state.region));
-        const stations = new Set(r.lines.flatMap(l => l.routes.flatMap(x => x.stations))).size;
-        b.append(
-          make('span', 'region-name', r.name),
-          make('span', 'region-count', `${r.lines.length}개 노선 · ${stations}개 역`),
-          make('span', 'region-sub', r.sub),
-        );
-        b.addEventListener('click', () => chooseRegion(r.id));
+        b.id = 'tab-' + r.id;
+        b.setAttribute('role', 'tab');
+        b.setAttribute('aria-selected', String(selected));
+        b.setAttribute('aria-controls', 'region-panel');
+        b.tabIndex = selected ? 0 : -1;
+        b.addEventListener('click', () => selectRegion(r.id));
+        b.addEventListener('keydown', e => {
+          const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+          if (!step) return;
+          e.preventDefault();
+          selectRegion(REGIONS[(i + step + REGIONS.length) % REGIONS.length].id, true);
+        });
         return b;
       }));
+      els.panel.setAttribute('aria-labelledby', 'tab-' + state.region);
     }
 
-    function filterSummary() {
-      const total = region().lines.length;
-      els.filterSummary.textContent = `뽑을 호선 고르기 (${total}개 중 ${enabledLines().length}개 켜짐)`;
+    function updateCount() {
+      els.filterCount.textContent = `${region().lines.length}개 중 ${enabledLines().length}개 켜짐`;
       els.lede.textContent = ledeFor('line');
     }
     /* ---------- 켜 둔 노선 지도 ---------- */
@@ -772,14 +773,12 @@
     let resizeFrame = 0;
     window.addEventListener('resize', () => {
       cancelAnimationFrame(resizeFrame);
-      resizeFrame = requestAnimationFrame(() => { if (!els.filter.hidden && els.filter.open) renderMap(); });
+      resizeFrame = requestAnimationFrame(() => { if (!els.filter.hidden) renderMap(); });
     });
-    els.filter.addEventListener('toggle', () => { if (els.filter.open) renderMap(); });
 
     function renderFilter() {
       const off = offSet();
-      const hasOptional = (region().optional || []).length > 0;
-      els.allDefault.hidden = !hasOptional;
+      renderTabs();
       els.chips.replaceChildren(...region().lines.map(l => {
         const b = make('button', 'chip' + (isNum(l) ? ' is-num' : ''), l.short);
         b.type = 'button';
@@ -795,12 +794,12 @@
           save();
           b.setAttribute('aria-pressed', String(!now.has(l.id)));
           setMsg('');
-          filterSummary();
+          updateCount();
           renderMap();
         });
         return b;
       }));
-      filterSummary();
+      updateCount();
       renderMap();
     }
     const setAllLines = on => {
@@ -810,14 +809,6 @@
       setMsg('');
       renderFilter();
     };
-    els.allDefault.addEventListener('click', () => {
-      if (busy) return;
-      delete state.off[state.region];
-      save();
-      setMsg('');
-      renderFilter();
-    });
-    els.regionBtn.addEventListener('click', () => go(0));
     els.choose.addEventListener('click', () => {
       if (busy) return;
       choosing = true;
@@ -861,7 +852,7 @@
       els.next.hidden = !has || spinning || chooser;
       els.next.textContent = i < DONE - 1 ? `다음: ${STEPS[i + 1].title}` : '코스 보기';
       els.redraw.hidden = !has || spinning || chooser;
-      els.choose.hidden = !(STEPS[i].key === 'line' && has && !spinning && !chooser && hasLineChooser());
+      els.choose.hidden = !(STEPS[i].key === 'line' && has && !spinning && !chooser);
       els.back.hidden = i === 0;
       els.back.setAttribute('aria-disabled', String(spinning));
       els.copy.hidden = i !== DONE;
@@ -875,16 +866,14 @@
       applyLineColor();
       els.title.textContent = STEPS[i].title;
       els.count.hidden = !drawStep;
-      els.count.textContent = drawStep ? `${i} / 5` : '';
+      els.count.textContent = drawStep ? `${i + 1} / 5` : '';
       els.lede.textContent = ledeFor(key);
 
-      els.regions.hidden = key !== 'region';
       // 뽑기 창은 뽑은 결과가 있을 때만 보입니다. (돌아가는 동안은 startRoll이 보여 줍니다.)
       const chooser = chooserShown();
       els.sign.hidden = !(drawStep && !!state[key] && !chooser);
       els.course.hidden = key !== 'done';
       els.filter.hidden = !chooser;
-      if (chooser) els.filter.open = true;
       els.actions.classList.toggle('is-docked', chooser);
       els.copyText.hidden = true;
 
@@ -892,9 +881,8 @@
       els.note.hidden = !showNote;
       els.note.textContent = showNote ? noteOf(curLine(), state.station) : '';
 
-      if (key === 'region') renderRegions();
       if (drawStep) paintSign(signFor(key));
-      if (key === 'line') renderFilter();
+      if (chooser) renderFilter();
       if (key === 'done') renderCourse();
       renderProgress();
       syncActions();
