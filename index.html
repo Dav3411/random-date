@@ -347,8 +347,6 @@
       <button id="next" class="btn btn-primary" type="button" hidden>다음</button>
       <div class="actions-row">
         <button id="back" class="btn" type="button" hidden>이전</button>
-        <button id="redraw" class="btn" type="button" hidden>다시 뽑기</button>
-        <button id="choose" class="btn" type="button" hidden>호선 목록</button>
         <button id="copy" class="btn" type="button" hidden>목록 복사</button>
         <button id="restart" class="btn" type="button" hidden>처음부터 다시</button>
       </div>
@@ -438,11 +436,11 @@
       sign: $('sign'), badge: $('badge'), name: $('sign-name'), band: $('band'),
       left: $('band-left'), order: $('order'), n: $('order-n'), right: $('band-right'),
       msg: $('msg'), course: $('course'),
-      draw: $('draw'), next: $('next'), back: $('back'), redraw: $('redraw'), copy: $('copy'), restart: $('restart'),
+      draw: $('draw'), next: $('next'), back: $('back'), copy: $('copy'), restart: $('restart'),
       toast: $('toast'), copyText: $('copy-text'),
       filter: $('filter'), filterCount: $('filter-count'), chips: $('line-chips'),
       tabs: $('region-tabs'), panel: $('region-panel'),
-      choose: $('choose'), actions: $('actions'), live: $('live'),
+      actions: $('actions'), live: $('live'),
       catFilter: $('cat-filter'), catTitle: $('cat-title'), catCount: $('cat-count'), catList: $('cat-list'),
     };
 
@@ -576,6 +574,7 @@
       if (rolling) return null;
       const key = STEPS[state.step].key;
       if (key === 'line') return !state.line || choosing ? 'line' : null;
+      if (key === 'station') return !state.station || choosing ? 'plain' : null; // 목록 없이 뽑기 버튼만
       if (DECKS[key]) return !state[key] || choosing ? 'cat' : null;
       return null;
     };
@@ -651,11 +650,7 @@
           return;
         }
         const others = on.filter(l => l.id !== state.line);
-        if (state.line && !others.length) {
-          setMsg('켜 둔 호선이 하나뿐이라 다시 뽑아도 같습니다.');
-          return;
-        }
-        // 다시 뽑을 때는 지금 호선을 빼고 돌리되, 그러면 하나만 남는 경우(켜 둔 호선 2개)는 둘 다 돌립니다.
+        // 다시 뽑을 때는 지금 호선을 빼고 돌리되, 그러면 하나 이하만 남는 경우는 켜 둔 것 전부 돌립니다.
         startRoll(others.length >= 2 ? others : on, l => paintSign(lineView(l)), pick => {
           if (pick.id !== state.line) state.station = null;
           state.line = pick.id;
@@ -684,10 +679,6 @@
       }
       // 지금 것을 빼고 돌리되, 그러면 하나만 남는 경우는 다 돌립니다.
       const others = on.filter(i => i.label !== state[key]);
-      if (state[key] && !others.length) {
-        setMsg('켜 둔 항목이 하나뿐이라 다시 뽑아도 같습니다.');
-        return;
-      }
       const pool = others.length >= 2 ? others : on;
       startRoll(pool, i => paintSign(itemView(i)), pick => {
         state[key] = pick.label;
@@ -971,12 +962,6 @@
       setMsg('');
       renderFilter();
     };
-    els.choose.addEventListener('click', () => {
-      if (busy) return;
-      choosing = true;
-      setMsg('');
-      render();
-    });
     $('all-on').addEventListener('click', () => setAllLines(true));
     $('all-off').addEventListener('click', () => setAllLines(false));
 
@@ -1051,11 +1036,9 @@
       els.draw.textContent = spinning ? '멈추기' : '뽑기';
       els.next.hidden = !has || spinning || chooser;
       els.next.textContent = i < DONE - 1 ? `다음: ${STEPS[i + 1].title}` : '코스 보기';
-      els.redraw.hidden = !has || spinning || chooser;
-      const key = STEPS[i].key;
-      els.choose.hidden = !((key === 'line' || DECKS[key]) && has && !spinning && !chooser);
-      els.choose.textContent = key === 'line' ? '호선 목록' : '종류 목록';
-      els.back.hidden = i === 0;
+      // 이전: 결과 화면에서는 이 단계의 뽑기 전 화면(목록)으로, 뽑기 전 화면에서는 앞 단계로
+      const showingResult = has && !chooser;
+      els.back.hidden = i === 0 && !showingResult;
       els.back.setAttribute('aria-disabled', String(spinning));
       els.copy.hidden = i !== DONE;
       els.restart.hidden = i !== DONE;
@@ -1088,12 +1071,23 @@
     /* ---------- 버튼 ---------- */
 
     els.draw.addEventListener('click', draw);
-    els.redraw.addEventListener('click', draw);
     els.next.addEventListener('click', () => {
       if (performance.now() < nextLockUntil) return;
       go(state.step + 1);
     });
-    els.back.addEventListener('click', () => go(state.step - 1));
+    els.back.addEventListener('click', () => {
+      if (busy) return;
+      const i = state.step;
+      if (isDrawStep(i) && state[STEPS[i].key] && !chooserShown()) {
+        // 결과 화면 → 같은 단계의 뽑기 전 화면(호선·종류 목록)으로. 거기서 다시 뽑을 수 있습니다.
+        choosing = true;
+        setMsg('');
+        render();
+        window.scrollTo(0, 0);
+        return;
+      }
+      go(i - 1);
+    });
 
     let toastTimer;
     const toast = msg => {
