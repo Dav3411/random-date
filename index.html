@@ -23,7 +23,8 @@
     --line: var(--idle);
     --on-line: var(--ink);
     --line-stroke: var(--line);
-    --map-bg: #F4F3F0;
+    --map-bg: #F6F7F6;
+    --map-line: #C4CCCB;
     --font-display: 'Do Hyeon', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
     --font-body: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
     color-scheme: light;
@@ -37,7 +38,8 @@
       --rule: #2C3842;
       --idle: #4A5863;
       --line-stroke: color-mix(in srgb, var(--line) 72%, #FFFFFF);
-      --map-bg: #202326;
+      --map-bg: #182027;
+      --map-line: #364450;
       color-scheme: dark;
     }
   }
@@ -194,13 +196,7 @@
     position: relative; width: 100%; max-width: 100%; aspect-ratio: 4 / 3;
     overflow: hidden; border-radius: 4px; border: 1px solid var(--rule); background: var(--map-bg);
   }
-  .map-tiles, .map-lines { position: absolute; inset: 0; width: 100%; height: 100%; }
-  .map-tiles img { position: absolute; display: block; max-width: none; user-select: none; pointer-events: none; }
-  /* 바탕 지도는 회색으로 흐리게 해서 노선 색이 먼저 보이게 합니다. */
-  .map-tiles { filter: grayscale(1) contrast(.9); opacity: .55; }
-  @media (prefers-color-scheme: dark) {
-    .map-tiles { filter: invert(1) grayscale(1) brightness(.75) contrast(1.1); opacity: .5; }
-  }
+  .map-lines { position: absolute; inset: 0; width: 100%; height: 100%; }
   .map-credit {
     position: absolute; right: 0; bottom: 0; margin: 0; padding: 1px 6px;
     font-size: .62rem; line-height: 1.5; color: var(--muted);
@@ -271,9 +267,8 @@
       <div class="tabs" id="region-tabs" role="tablist" aria-label="지역"></div>
       <div class="filter-body" id="region-panel" role="tabpanel">
         <div class="map" id="line-map" hidden>
-          <div class="map-tiles" id="map-tiles"></div>
           <svg class="map-lines" id="map-lines" role="img" aria-label="켜 둔 노선 지도"></svg>
-          <p class="map-credit">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 기여자</p>
+          <p class="map-credit">경계: <a href="https://sgis.kostat.go.kr/" target="_blank" rel="noopener">통계청 SGIS</a></p>
         </div>
         <div class="chips" id="line-chips"></div>
       </div>
@@ -675,10 +670,9 @@
     }
     /* ---------- 켜 둔 노선 지도 ---------- */
 
-    // 지도 바탕은 OpenStreetMap 타일, 노선은 그 위에 SVG로 그립니다. 확대·이동 없는 그림입니다.
-    const TILE = 256;
+    // 바탕은 시 경계선과 해안선만 그리고, 노선은 그 위에 노선 색으로 그립니다. 확대·이동 없는 그림입니다.
     const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const mapEls = { box: $('line-map'), tiles: $('map-tiles'), svg: $('map-lines') };
+    const mapEls = { box: $('line-map'), svg: $('map-lines') };
     const SVGNS = 'http://www.w3.org/2000/svg';
     const project = (lat, lon) => {
       const s = Math.sin((lat * Math.PI) / 180);
@@ -693,6 +687,26 @@
       if (r.loop && pts.length > 2) pts.push(pts[0]);
       return pts;
     }).filter(p => p.length > 1);
+    // 종점: 구간의 끝 역 중 다른 구간 한가운데에 있지 않은 역 (갈라지는 역은 빼고, 순환선은 없음)
+    const terminiOf = line => {
+      const inner = new Set(line.routes.flatMap(r => (r.loop ? r.stations : r.stations.slice(1, -1))));
+      const ends = new Set(line.routes.filter(r => !r.loop).flatMap(r => [r.stations[0], r.stations[r.stations.length - 1]]));
+      return [...ends].filter(n => !inner.has(n)).map(n => coordOf(line, n)).filter(Boolean).map(([lat, lon]) => project(lat, lon));
+    };
+    // bounds.js의 시 경계선을 [x, y] 목록으로 풉니다. 지역마다 한 번만 풉니다.
+    const boundCache = {};
+    const boundLines = () => {
+      if (typeof BOUNDS === 'undefined' || !BOUNDS[state.region]) return [];
+      return boundCache[state.region] || (boundCache[state.region] = BOUNDS[state.region].map(arr => {
+        const pts = [];
+        let x = 0, y = 0;
+        for (let i = 0; i < arr.length; i += 2) {
+          x += arr[i]; y += arr[i + 1];
+          pts.push(project(y / 1e4, x / 1e4));
+        }
+        return pts;
+      }));
+    };
 
     function renderMap() {
       const box = mapEls.box;
@@ -711,59 +725,44 @@
       }
       if (!Number.isFinite(minX)) { box.hidden = true; return; }
 
-      // 켜 둔 노선이 다 들어오는 배율. 타일은 한 단계 큰 것을 받아 줄여서 씁니다.
+      // 켜 둔 노선이 다 들어오는 배율 (메르카토르 좌표 → 화면 픽셀)
       const pad = 16;
-      const span = Math.max((maxX - minX) / (W - 2 * pad), (maxY - minY) / (H - 2 * pad), 1e-9);
-      const zf = Math.min(15, Math.max(3, Math.log2(1 / (span * TILE))));
-      const z = Math.ceil(zf);
-      const k = 2 ** (zf - z);
-      const world = TILE * 2 ** z;
-      const ox = ((minX + maxX) / 2) * world - W / 2 / k;
-      const oy = ((minY + maxY) / 2) * world - H / 2 / k;
-      const toScreen = ([px, py]) => [(px * world - ox) * k, (py * world - oy) * k];
-
-      const n = 2 ** z;
-      const size = TILE * k;
-      const imgs = [];
-      for (let ty = Math.floor(oy / TILE); ty <= Math.floor((oy + H / k) / TILE); ty++) {
-        if (ty < 0 || ty >= n) continue;
-        for (let tx = Math.floor(ox / TILE); tx <= Math.floor((ox + W / k) / TILE); tx++) {
-          const img = new Image();
-          img.alt = '';
-          img.decoding = 'async';
-          img.src = `https://tile.openstreetmap.org/${z}/${((tx % n) + n) % n}/${ty}.png`;
-          img.style.left = (tx * TILE - ox) * k + 'px';
-          img.style.top = (ty * TILE - oy) * k + 'px';
-          img.style.width = img.style.height = size + 0.5 + 'px';
-          imgs.push(img);
-        }
-      }
-      mapEls.tiles.replaceChildren(...imgs);
+      const scale = Math.min((W - 2 * pad) / Math.max(maxX - minX, 1e-9), (H - 2 * pad) / Math.max(maxY - minY, 1e-9), 2 ** 23);
+      const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+      const toScreen = ([px, py]) => [(px - cx) * scale + W / 2, (py - cy) * scale + H / 2];
+      const pointsOf = pts => pts.map(p => toScreen(p).map(v => v.toFixed(1)).join(',')).join(' ');
 
       const svg = mapEls.svg;
       svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-      const bg = getComputedStyle(document.documentElement).getPropertyValue('--map-bg').trim() || '#fff';
-      const path = (pts, attrs) => {
-        const el = document.createElementNS(SVGNS, 'polyline');
-        el.setAttribute('points', pts.map(p => toScreen(p).map(v => v.toFixed(1)).join(',')).join(' '));
-        el.setAttribute('fill', 'none');
-        el.setAttribute('stroke-linejoin', 'round');
-        el.setAttribute('stroke-linecap', 'round');
-        for (const [a, v] of Object.entries(attrs)) el.setAttribute(a, v);
-        return el;
+      const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      const bg = css('--map-bg') || '#fff';
+      const el = (tag, attrs) => {
+        const node = document.createElementNS(SVGNS, tag);
+        for (const [a, v] of Object.entries(attrs)) node.setAttribute(a, v);
+        return node;
       };
+      const line = (pts, attrs) => el('polyline', {
+        points: pointsOf(pts), fill: 'none', 'stroke-linejoin': 'round', 'stroke-linecap': 'round', ...attrs,
+      });
       const nodes = [];
-      // 꺼 둔 노선은 흐리게, 켜 둔 노선은 노선 색으로 테두리를 둘러 겹쳐도 구분되게 그립니다.
-      for (const x of all) if (!x.on) for (const p of x.paths) {
-        nodes.push(path(p, { stroke: getComputedStyle(document.documentElement).getPropertyValue('--muted').trim(), 'stroke-width': 1.5, 'stroke-opacity': 0.35 }));
-      }
-      for (const x of all) if (x.on) for (const p of x.paths) nodes.push(path(p, { stroke: bg, 'stroke-width': 6, 'stroke-opacity': 0.9 }));
+
+      // 시 경계와 해안선: 한 path에 모아 가늘게 그립니다.
+      const d = boundLines().map(pts => 'M' + pts.map(p => toScreen(p).map(v => v.toFixed(1)).join(' ')).join('L')).join('');
+      if (d) nodes.push(el('path', { d, fill: 'none', stroke: css('--map-line'), 'stroke-width': 0.8, 'stroke-linejoin': 'round' }));
+
+      // 켜 둔 노선만 노선 색으로, 바탕색 테두리를 둘러 겹쳐도 구분되게 그립니다.
+      for (const x of all) if (x.on) for (const p of x.paths) nodes.push(line(p, { stroke: bg, 'stroke-width': 6, 'stroke-opacity': 0.9 }));
       for (const x of all) if (x.on) {
-        const g = document.createElementNS(SVGNS, 'g');
-        const title = document.createElementNS(SVGNS, 'title');
+        const g = el('g', {});
+        const title = el('title', {});
         title.textContent = x.line.name;
-        g.append(title, ...x.paths.map(p => path(p, { stroke: x.line.color, 'stroke-width': 3.5 })));
+        g.append(title, ...x.paths.map(p => line(p, { stroke: x.line.color, 'stroke-width': 3.5 })));
         nodes.push(g);
+      }
+      // 노선의 처음과 끝은 도넛 모양으로 표시합니다.
+      for (const x of all) if (x.on) for (const p of terminiOf(x.line)) {
+        const [sx, sy] = toScreen(p);
+        nodes.push(el('circle', { cx: sx.toFixed(1), cy: sy.toFixed(1), r: 4.5, fill: bg, stroke: x.line.color, 'stroke-width': 3 }));
       }
       const names = all.filter(x => x.on).map(x => x.line.name);
       svg.setAttribute('aria-label', names.length ? `켜 둔 노선 지도: ${names.join(', ')}` : '켜 둔 노선이 없습니다');
@@ -968,7 +967,8 @@
       document.head.append(s);
     });
     load('data.js')
-      .then(() => load('coords.js').catch(() => {})) // 좌표가 없으면 지도만 빠지고 뽑기는 됩니다.
+      // 좌표·경계가 없으면 지도만 빠지거나 바탕선 없이 그려지고, 뽑기는 그대로 됩니다.
+      .then(() => Promise.all([load('coords.js'), load('bounds.js')].map(p => p.catch(() => {}))))
       .then(start, () => {
         document.getElementById('lede').textContent = '노선 데이터를 불러오지 못했습니다. 새로고침해 주세요.';
       });
