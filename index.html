@@ -5,6 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>랜덤 역 데이트</title>
 <meta name="description" content="‘아무거나’라고 했지? 그럼 진짜 아무 역에 내려서 아무거나 먹고 아무거나 한다. 지하철 호선부터 역, 밥, 디저트, 놀거리까지 전부 뽑기로 정하는 데이트. 무르기 없음.">
+<!-- 링크 미리보기(카카오톡·메신저·SNS). 공유할 때는 링크만 보내므로 이 제목·설명·그림이 그대로 보입니다.
+     어떤 코스 링크든 미리보기는 같습니다(미리보기는 이 태그만 읽고, 뽑힌 코스는 페이지를 열어야 보입니다). -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="랜덤 역 데이트">
+<meta property="og:title" content="랜덤 역 데이트">
+<meta property="og:description" content="오늘 데이트는 뽑기가 정했다. 눌러서 확인해.">
+<meta property="og:image" content="https://dav3411.github.io/random-date/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="ko_KR">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='23' fill='%23fff' stroke='%2300A84D' stroke-width='12'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1710,16 +1721,15 @@
       toastTimer = setTimeout(() => { els.toast.textContent = ''; }, 4000);
     };
 
-    // 공유하기: 휴대폰 공유 창(카카오톡 등)으로 링크를 보내고, 없으면 링크를 복사합니다.
+    // 공유하기: 휴대폰 공유 창(카카오톡 등)으로 링크만 보내고, 없으면 링크를 복사합니다.
+    // 글자는 같이 보내지 않습니다. 받는 쪽에는 링크 미리보기(og 태그의 제목·설명·그림)가 뜹니다.
     els.share.addEventListener('click', async () => {
       const sn = view === 'snap' ? snap : snapFromState();
-      const c = resolveSnap(sn);
-      if (!c) return;
+      if (!resolveSnap(sn)) return;
       const url = shareUrl(sn);
-      const text = `오늘 데이트 뽑힘: ${c.line.name} ${stationLabel(c.station.name)} · ${sn.food} · ${sn.dessert} · ${sn.play}. 무르기 없음.`;
       if (navigator.share) {
         try {
-          await navigator.share({ title: '랜덤 역 데이트 코스', text, url });
+          await navigator.share({ url });
           return;
         } catch (e) {
           if (e && e.name === 'AbortError') return; // 공유 창을 닫은 경우
