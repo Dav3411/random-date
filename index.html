@@ -137,6 +137,8 @@
     font: 400 1.9rem/1 var(--font-display);
   }
   .badge.is-pill { width: auto; height: 40px; padding: 0 14px; border-radius: 20px; font-size: 1.15rem; white-space: nowrap; }
+  /* 원 안 글자는 실제 글자 모양을 재서 가운데로 옮깁니다(centerInk). 글꼴마다 위아래 여백이 달라서입니다. */
+  .badge > span, .sign-order b, .sign-order small { display: block; }
   .sign-name { min-width: 0; overflow-wrap: anywhere; font: 400 clamp(2.1rem, 10vw, 3.5rem)/1.08 var(--font-display); }
   .sign-name.is-long { font-size: clamp(1.6rem, 7vw, 2.7rem); }
   .sign-name.is-empty, .sign.is-rolling .sign-name { color: var(--muted); }
@@ -155,7 +157,7 @@
     width: 70px; height: 70px; margin-block: -18px; border-radius: 50%;
     background: var(--surface); color: var(--ink);
     border: 5px solid var(--line);
-    display: grid; place-content: center; justify-items: center; gap: 1px;
+    display: grid; place-content: center; justify-items: center; gap: 5px;
   }
   .sign-order b { font: 400 1.6rem/1 var(--font-display); font-variant-numeric: tabular-nums; }
   .sign-order small { font-size: .68rem; font-weight: 500; line-height: 1; color: var(--muted); }
@@ -235,6 +237,17 @@
     background: color-mix(in srgb, var(--surface) 80%, transparent);
   }
   .map-credit a { color: inherit; }
+  /* 밥·디저트·놀거리 종류: 줄마다 종류 버튼과 그 안의 항목 */
+  .cats { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 12px; align-items: start; }
+  .cat-row { display: contents; }
+  .cat {
+    padding: 7px 12px; border-radius: 999px;
+    border: 1.5px solid var(--ink); background: var(--ink); color: var(--bg);
+    font: 600 .88rem/1.2 var(--font-body); cursor: pointer; white-space: nowrap;
+  }
+  .cat[aria-pressed="false"] { background: transparent; border-color: var(--rule); color: var(--muted); }
+  .cat-items { padding-top: 6px; font-size: .86rem; line-height: 1.55; color: var(--ink); word-break: keep-all; }
+  .cat[aria-pressed="false"] + .cat-items { color: var(--muted); opacity: .55; text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 50%, transparent); }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip {
     min-width: 42px; height: 42px; padding: 0 13px; border-radius: 21px;
@@ -298,6 +311,20 @@
         </div>
         <div class="chips" id="line-chips"></div>
       </div>
+    </section>
+
+    <section class="filter" id="cat-filter" aria-labelledby="cat-title" hidden>
+      <div class="filter-head">
+        <div class="filter-heading">
+          <h2 class="filter-title" id="cat-title">뽑을 종류 고르기</h2>
+          <p class="filter-count" id="cat-count"></p>
+        </div>
+        <div class="mini-actions">
+          <button id="cat-all-on" class="btn-mini" type="button">전부 켜기</button>
+          <button id="cat-all-off" class="btn-mini" type="button">전부 끄기</button>
+        </div>
+      </div>
+      <ul class="cats" id="cat-list"></ul>
     </section>
 
     <div class="sign" id="sign" hidden>
@@ -364,7 +391,8 @@
       set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* 기억만 못 함 */ } },
     };
 
-    const state = { region: REGIONS[0].id, off: {}, step: 0, line: null, station: null, food: null, dessert: null, play: null };
+    // offCat: 밥·디저트·놀거리에서 꺼 둔 종류(카테고리)
+    const state = { region: REGIONS[0].id, off: {}, offCat: {}, step: 0, line: null, station: null, food: null, dessert: null, play: null };
 
     const region = () => regionById[state.region];
     const curLine = () => region().lines.find(l => l.id === state.line) || null;
@@ -397,6 +425,7 @@
         }
         for (const k of ['food', 'dessert', 'play']) {
           if (DECKS[k].some(i => i.label === s[k])) state[k] = s[k];
+          if (s.offCat && Array.isArray(s.offCat[k])) state.offCat[k] = s.offCat[k].filter(c => DECKS[k].some(i => i.cat === c));
         }
         if (Number.isInteger(s.step) && s.step >= 0 && s.step <= DONE) state.step = s.step;
         while (!reachable(state.step)) state.step--;
@@ -414,6 +443,7 @@
       filter: $('filter'), filterCount: $('filter-count'), chips: $('line-chips'),
       tabs: $('region-tabs'), panel: $('region-panel'),
       choose: $('choose'), actions: $('actions'), live: $('live'),
+      catFilter: $('cat-filter'), catTitle: $('cat-title'), catCount: $('cat-count'), catList: $('cat-list'),
     };
 
     const mapUrl = q => 'https://map.naver.com/p/search/' + encodeURIComponent(q);
@@ -478,13 +508,42 @@
       els.sign.style.setProperty('--sign-weight', weight || 400);
     }
 
+    // 원 안 글자를 눈으로 보이는 가운데에: 글꼴의 기준선과 실제 글자 모양(잉크) 위아래를 재서 그만큼 옮깁니다.
+    const inkCtx = document.createElement('canvas').getContext('2d');
+    function inkExtent(el) {
+      const r = (() => { const range = document.createRange(); range.selectNodeContents(el); return range.getClientRects()[0]; })();
+      if (!r || !el.textContent) return null;
+      const cs = getComputedStyle(el);
+      inkCtx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      const m = inkCtx.measureText(el.textContent);
+      if (!m.fontBoundingBoxAscent && !m.actualBoundingBoxAscent) return null;
+      const baseline = r.top + m.fontBoundingBoxAscent;
+      return [baseline - m.actualBoundingBoxAscent, baseline + m.actualBoundingBoxDescent];
+    }
+    function centerInk(box, parts) {
+      parts.forEach(p => { p.style.transform = ''; });
+      if (box.hidden) return;
+      const ext = parts.map(inkExtent).filter(Boolean);
+      if (!ext.length) return;
+      const top = Math.min(...ext.map(e => e[0])), bottom = Math.max(...ext.map(e => e[1]));
+      const b = box.getBoundingClientRect();
+      const dy = b.top + box.clientTop + box.clientHeight / 2 - (top + bottom) / 2;
+      if (Math.abs(dy) > 0.3 && Math.abs(dy) < box.clientHeight / 2) parts.forEach(p => { p.style.transform = `translateY(${dy.toFixed(2)}px)`; });
+    }
+    function centerSignMarks() {
+      centerInk(els.badge, [...els.badge.children]);
+      centerInk(els.order, [...els.order.children]);
+    }
+    // 글꼴이 늦게 도착하면 다시 맞춥니다.
+    if (document.fonts) document.fonts.addEventListener('loadingdone', () => { if (!els.sign.hidden) centerSignMarks(); });
+
     function paintSign(v) {
       const line = v.line || null;
       applySignFont(line || curLine());
       // 노선 표시: 숫자 노선은 동그라미에 숫자, 이름 노선은 알약 모양에 짧은 이름(수인분당, 인천1 …)
       els.badge.hidden = !line || !!v.noBadge;
       if (line) {
-        els.badge.textContent = line.short;
+        els.badge.replaceChildren(make('span', null, line.short));
         els.badge.classList.toggle('is-pill', !isNum(line));
         els.badge.style.background = line.color;
         els.badge.style.color = line.on;
@@ -500,6 +559,7 @@
       els.band.style.background = line ? line.color : '';
       els.band.style.color = line ? line.on : '';
       els.order.style.borderColor = line ? line.color : '';
+      centerSignMarks();
     }
 
     /* ---------- 뽑기: 한 번에 하나 ---------- */
@@ -510,7 +570,20 @@
     let choosing = false;    // 호선을 뽑은 뒤 "호선 목록"으로 다시 목록을 보는 중
 
     // 호선 단계는 뽑기 전에는 호선 목록만, 뽑기 시작 후에는 뽑기 창만 보여 줍니다.
-    const chooserShown = () => STEPS[state.step].key === 'line' && !rolling && (!state.line || choosing);
+    // 밥·디저트·놀거리도 같은 방식: 뽑기 전에는 종류 목록만, 뽑기 시작 후에는 뽑기 창만.
+    // 'line' | 'cat' | null
+    const chooserKind = () => {
+      if (rolling) return null;
+      const key = STEPS[state.step].key;
+      if (key === 'line') return !state.line || choosing ? 'line' : null;
+      if (DECKS[key]) return !state[key] || choosing ? 'cat' : null;
+      return null;
+    };
+    const chooserShown = () => !!chooserKind();
+    // 종류(카테고리)
+    const catsOf = key => [...new Set(DECKS[key].map(i => i.cat))];
+    const offCats = key => new Set(state.offCat[key] || []);
+    const enabledItems = key => { const off = offCats(key); return DECKS[key].filter(i => !off.has(i.cat)); };
 
     // 뽑기를 누르면 후보가 계속 돌아가고, 한 번 더 누르면 그때 보이던 것으로 정해집니다.
     function startRoll(pool, show, commit) {
@@ -542,8 +615,9 @@
         },
       };
       els.sign.classList.add('is-rolling');
-      const wasChoosing = !els.filter.hidden;
+      const wasChoosing = !els.filter.hidden || !els.catFilter.hidden;
       els.filter.hidden = true;
+      els.catFilter.hidden = true;
       els.sign.hidden = false;
       if (wasChoosing) window.scrollTo(0, 0);
       if (still) paintSign({ name: '뽑는 중', empty: true }); else tick();
@@ -601,7 +675,20 @@
         return;
       }
 
-      const pool = DECKS[key].filter(i => i.label !== state[key]);
+      const on = enabledItems(key);
+      if (!on.length) {
+        choosing = true;
+        render();
+        setMsg('켜 둔 종류가 없습니다. "뽑을 종류 고르기"에서 하나 이상 켜 주세요.');
+        return;
+      }
+      // 지금 것을 빼고 돌리되, 그러면 하나만 남는 경우는 다 돌립니다.
+      const others = on.filter(i => i.label !== state[key]);
+      if (state[key] && !others.length) {
+        setMsg('켜 둔 항목이 하나뿐이라 다시 뽑아도 같습니다.');
+        return;
+      }
+      const pool = others.length >= 2 ? others : on;
       startRoll(pool, i => paintSign(itemView(i)), pick => {
         state[key] = pick.label;
         finishDraw(pick.label);
@@ -893,6 +980,44 @@
     $('all-on').addEventListener('click', () => setAllLines(true));
     $('all-off').addEventListener('click', () => setAllLines(false));
 
+    /* ---------- 밥·디저트·놀거리 종류 고르기 ---------- */
+
+    function renderCats() {
+      const key = STEPS[state.step].key;
+      const off = offCats(key);
+      const cats = catsOf(key);
+      els.catTitle.textContent = `뽑을 ${STEPS[state.step].short} 종류`;
+      els.catCount.textContent = `${DECKS[key].length}개 중 ${enabledItems(key).length}개 켜짐`;
+      els.catList.replaceChildren(...cats.map(cat => {
+        const items = DECKS[key].filter(i => i.cat === cat);
+        const li = make('li', 'cat-row');
+        const b = make('button', 'cat', cat);
+        b.type = 'button';
+        b.setAttribute('aria-pressed', String(!off.has(cat)));
+        b.addEventListener('click', () => {
+          if (busy) return;
+          const now = offCats(key);
+          if (now.has(cat)) now.delete(cat); else now.add(cat);
+          state.offCat[key] = [...now];
+          save();
+          setMsg('');
+          renderCats();
+        });
+        li.append(b, make('p', 'cat-items', items.map(i => i.label).join(' · ')));
+        return li;
+      }));
+    }
+    const setAllCats = on => {
+      if (busy) return;
+      const key = STEPS[state.step].key;
+      state.offCat[key] = on ? [] : catsOf(key);
+      save();
+      setMsg('');
+      renderCats();
+    };
+    $('cat-all-on').addEventListener('click', () => setAllCats(true));
+    $('cat-all-off').addEventListener('click', () => setAllCats(false));
+
     function renderCourse() {
       const line = curLine();
       const s = state.station;
@@ -927,7 +1052,9 @@
       els.next.hidden = !has || spinning || chooser;
       els.next.textContent = i < DONE - 1 ? `다음: ${STEPS[i + 1].title}` : '코스 보기';
       els.redraw.hidden = !has || spinning || chooser;
-      els.choose.hidden = !(STEPS[i].key === 'line' && has && !spinning && !chooser);
+      const key = STEPS[i].key;
+      els.choose.hidden = !((key === 'line' || DECKS[key]) && has && !spinning && !chooser);
+      els.choose.textContent = key === 'line' ? '호선 목록' : '종류 목록';
       els.back.hidden = i === 0;
       els.back.setAttribute('aria-disabled', String(spinning));
       els.copy.hidden = i !== DONE;
@@ -942,15 +1069,17 @@
       els.title.textContent = STEPS[i].title;
 
       // 뽑기 창은 뽑은 결과가 있을 때만 보입니다. (돌아가는 동안은 startRoll이 보여 줍니다.)
-      const chooser = chooserShown();
+      const kind = chooserKind();
+      const chooser = !!kind;
       els.sign.hidden = !(drawStep && !!state[key] && !chooser);
       els.course.hidden = key !== 'done';
-      els.filter.hidden = !chooser;
+      els.filter.hidden = kind !== 'line';
+      els.catFilter.hidden = kind !== 'cat';
       els.copyText.hidden = true;
 
-
       if (drawStep) paintSign(signFor(key));
-      if (chooser) renderFilter();
+      if (kind === 'line') renderFilter();
+      if (kind === 'cat') renderCats();
       if (key === 'done') renderCourse();
       renderProgress();
       syncActions();
