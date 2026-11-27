@@ -357,6 +357,12 @@
     background: var(--surface); font-size: .86rem; line-height: 1.55; color: var(--ink); word-break: keep-all;
   }
   .cat-row.is-off .cat-items { color: var(--muted); opacity: .55; text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 50%, transparent); }
+  /* 역 근처에 없는 항목은 흐리게 (뽑기에서 빠짐) */
+  .cat-items .is-far { color: var(--muted); opacity: .45; }
+  .cat-near { margin: -4px 0 0; font-size: .82rem; color: var(--muted); }
+  .cat-near b { color: var(--ink); font-weight: 600; }
+  .cat-credit { margin: 0; font-size: .66rem; color: var(--muted); text-align: right; }
+  .cat-credit a { color: inherit; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip {
     min-width: 42px; height: 42px; padding: 0 13px; border-radius: 21px;
@@ -498,7 +504,9 @@
           <button id="cat-all-off" class="btn-mini" type="button">전부 해제</button>
         </div>
       </div>
+      <p class="cat-near" id="cat-near" hidden></p>
       <ul class="cats" id="cat-list"></ul>
+      <p class="cat-credit" id="cat-credit" hidden>가게 정보: <a href="https://www.data.go.kr/data/15083033/fileData.do" target="_blank" rel="noopener">소상공인시장진흥공단 상가(상권)정보</a></p>
     </section>
 
     <figure class="item-card" id="item-card" hidden>
@@ -635,6 +643,7 @@
       tabs: $('region-tabs'), panel: $('region-panel'),
       actions: $('actions'), live: $('live'),
       catFilter: $('cat-filter'), catTitle: $('cat-title'), catCount: $('cat-count'), catList: $('cat-list'),
+      catNear: $('cat-near'), catCredit: $('cat-credit'),
     };
 
     // 네이버 지도 링크. 휴대폰에서는 네이버 지도 앱이 바로 뜨도록, 네이버 모바일 웹의 '앱 열기' 버튼과 같은 주소를 씁니다.
@@ -877,6 +886,44 @@
     const catsOf = key => [...new Set(DECKS[key].map(i => i.cat))];
     const offCats = key => new Set(state.offCat[key] || []);
     const enabledItems = key => { const off = offCats(key); return DECKS[key].filter(i => !off.has(i.cat)); };
+
+    // 역 근처에 있는 것만: near.js(공공 상가정보로 역마다 미리 계산한 표)를 봅니다.
+    // 근처(radius) 후보가 NEAR_MIN개보다 적으면 넓은 반경(wide)으로, 그래도 적으면 전체에서 뽑습니다.
+    // near.js가 없거나 그 역 자료가 없으면 지금처럼 전체에서 뽑습니다.
+    const NEAR_MIN = 3;
+    const nearReady = () => typeof NEAR !== 'undefined' && !!NEAR && !!NEAR.st;
+    const bitsCache = new Map();
+    function stationBits(which) {
+      if (!nearReady() || !state.station) return null;
+      const line = curLine();
+      const tbl = (NEAR[which] || {})[state.region] || {};
+      const b64 = (line && tbl[line.id + ':' + state.station.name]) || tbl[state.station.name];
+      if (!b64) return null;
+      if (!bitsCache.has(b64)) {
+        const bin = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+        bitsCache.set(b64, Uint8Array.from(bin, c => c.charCodeAt(0)));
+      }
+      return bitsCache.get(b64);
+    }
+    function isNear(key, item, bytes) {
+      const i = NEAR.items[key] ? NEAR.items[key].indexOf(item.label) : -1;
+      if (i < 0) return true; // 표를 만든 뒤에 새로 넣은 항목
+      const before = { food: 0, dessert: NEAR.items.food.length, play: NEAR.items.food.length + NEAR.items.dessert.length }[key];
+      const bit = before + i;
+      return ((bytes[bit >> 3] >> (bit & 7)) & 1) === 1;
+    }
+    // { pool: 뽑을 후보, scope: 'near' | 'wide' | 'all', known: 근처 자료가 있는지 }
+    function nearFilter(key, items) {
+      const near = stationBits('st');
+      if (!near) return { pool: items, scope: 'all', known: false };
+      const a = items.filter(i => isNear(key, i, near));
+      if (a.length >= NEAR_MIN) return { pool: a, scope: 'near', known: true };
+      const wide = stationBits('wd');
+      const b = wide ? items.filter(i => isNear(key, i, wide)) : [];
+      if (b.length >= NEAR_MIN) return { pool: b, scope: 'wide', known: true };
+      return { pool: items, scope: 'all', known: true };
+    }
+    const meters = m => (m >= 1000 ? `${m / 1000}km` : `${m}m`);
 
     /* ---------- 이름 릴: 슬롯머신처럼 새 이름이 아래에서 밀려 올라옵니다 ---------- */
 
@@ -1177,9 +1224,10 @@
         setMsg('선택한 종류가 없습니다. "뽑을 종류 고르기"에서 하나 이상 선택해 주세요.');
         return;
       }
-      // 지금 것을 빼고 돌리되, 그러면 하나만 남는 경우는 다 돌립니다.
-      const others = on.filter(i => i.label !== state[key]);
-      const pool = others.length >= 2 ? others : on;
+      // 역 근처에 있는 것만 돌립니다. 지금 것을 빼고 돌리되, 그러면 하나만 남는 경우는 다 돌립니다.
+      const near = nearFilter(key, on).pool;
+      const others = near.filter(i => i.label !== state[key]);
+      const pool = others.length >= 2 ? others : near;
       preloadThumbs(key, pool);
       startRoll(pool, i => paintItem(key, i, !!rolling), pick => {
         state[key] = pick.label;
@@ -1512,6 +1560,19 @@
       const open = openCats[key] || (openCats[key] = new Set());
       els.catTitle.textContent = `뽑을 ${STEPS[state.step].short} 종류`;
       els.catCount.textContent = `${DECKS[key].length}개 중 ${enabledItems(key).length}개 선택`;
+      // 역 근처 안내: 선택한 것 중 근처에 있는 몇 개에서 뽑는지. 펼친 목록에서는 근처에 없는 항목을 흐리게.
+      const nf = nearFilter(key, enabledItems(key));
+      const nearSet = nf.known && nf.scope !== 'all' ? new Set(nf.pool.map(i => i.label)) : null;
+      const nearAll = nf.known ? new Set(nearFilter(key, DECKS[key]).pool.map(i => i.label)) : null;
+      const where = state.station ? stationLabel(state.station.name) : '역';
+      els.catNear.hidden = !nf.known;
+      els.catCredit.hidden = !nf.known;
+      if (nf.known) {
+        const n = make('b', null, `${nf.pool.length}개`);
+        if (nf.scope === 'near') els.catNear.replaceChildren(`${where} ${meters(NEAR.radius)} 안에 있는 `, n, '에서 뽑아요');
+        else if (nf.scope === 'wide') els.catNear.replaceChildren(`${where} 바로 근처엔 적어서 ${meters(NEAR.wide)} 안에 있는 `, n, '에서 뽑아요');
+        else els.catNear.replaceChildren(`${where} 근처에 마땅한 곳이 적어서 선택한 `, n, ' 전부에서 뽑아요');
+      }
       els.catList.replaceChildren(...cats.map((cat, idx) => {
         const items = DECKS[key].filter(i => i.cat === cat);
         const li = make('li', 'cat-row' + (off.has(cat) ? ' is-off' : ''));
@@ -1528,7 +1589,14 @@
           renderCats();
         });
         // 세부 항목: 알약 안 오른쪽의 ⌄를 누르면 펼치고 접습니다.
-        const list = make('p', 'cat-items', items.map(i => i.label).join(' · '));
+        const list = make('p', 'cat-items');
+        items.forEach((i, n) => {
+          // 근처에 없는 항목: 지금 뽑는 범위(nearSet)가 있으면 그 기준, 종류를 꺼 둔 경우엔 근처 표 기준
+          const far = off.has(cat) ? (nearAll && !nearAll.has(i.label)) : (nearSet && !nearSet.has(i.label));
+          const s = make('span', far ? 'is-far' : null, i.label);
+          if (far) s.title = '역 근처에 없어요';
+          list.append(...(n ? [' · ', s] : [s]));
+        });
         list.id = `cat-items-${idx}`;
         list.hidden = !open.has(cat);
         const more = make('button', 'cat-more');
@@ -2194,7 +2262,7 @@
     });
     load('data.js')
       // 좌표·경계가 없으면 지도만 빠지거나 바탕선 없이 그려지고, 뽑기는 그대로 됩니다.
-      .then(() => Promise.all([load('coords.js'), load('bounds.js'), load('photos.js')].map(p => p.catch(() => {}))))
+      .then(() => Promise.all([load('coords.js'), load('bounds.js'), load('photos.js'), load('near.js')].map(p => p.catch(() => {}))))
       .then(start, () => {
         const lede = document.getElementById('lede');
         lede.textContent = '노선 데이터를 불러오지 못했습니다. 새로고침해 주세요.';
