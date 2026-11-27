@@ -564,7 +564,10 @@
       catFilter: $('cat-filter'), catTitle: $('cat-title'), catCount: $('cat-count'), catList: $('cat-list'),
     };
 
-    const mapUrl = q => 'https://map.naver.com/p/search/' + encodeURIComponent(q);
+    // 휴대폰에서 map.naver.com 주소는 매번 '네이버지도 앱 설치·열기' 안내 페이지로 넘겨집니다.
+    // 그래서 휴대폰에서는 검색 결과가 바로 나오는 모바일 지도 주소를 씁니다. (앱은 그 화면의 '앱 열기'로)
+    const onPhone = /Android|iPhone|iPod|Mobile/i.test(navigator.userAgent);
+    const mapUrl = q => (onPhone ? 'https://m.map.naver.com/search?query=' : 'https://map.naver.com/p/search/') + encodeURIComponent(q);
     const countOf = s => `${s.loop ? s.origin : s.origin + '에서'} ${s.n}번째`;
     const setMsg = text => { els.msg.textContent = text || ''; els.msg.hidden = !text; };
     const announce = text => { els.live.textContent = text; };
