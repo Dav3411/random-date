@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>랜덤 역 데이트</title>
-<meta name="description" content="‘아무거나’라고 했지? 그럼 진짜 아무 역에 내려서 아무거나 먹고 아무거나 한다. 지하철 호선부터 역, 밥, 디저트, 놀거리까지 전부 뽑기로 정하는 데이트. 무르기 없음.">
-<!-- 링크 미리보기(카카오톡·메신저·SNS). 공유할 때는 링크만 보내므로 이 제목·설명·그림이 그대로 보입니다.
-     어떤 코스 링크든 미리보기는 같습니다(미리보기는 이 태그만 읽고, 뽑힌 코스는 페이지를 열어야 보입니다). -->
+<meta name="description" content="‘아무거나’라고 했지? 그럼 오늘 데이트는 전부 랜덤이다. 지하철 호선부터 역, 밥, 디저트, 놀거리까지 전부 뽑기로 정하는 데이트.">
+<!-- 링크 미리보기(카카오톡·메신저·SNS)의 제목·설명·그림. 어떤 코스 링크든 미리보기는 같습니다
+     (미리보기는 이 태그만 읽습니다). 뽑힌 코스는 공유할 때 메시지 글로 같이 보냅니다. -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="랜덤 역 데이트">
 <meta property="og:title" content="랜덤 역 데이트">
-<meta property="og:description" content="오늘 데이트는 뽑기가 정했다. 눌러서 확인해.">
+<meta property="og:description" content="‘아무거나’라고 했지? 그럼 오늘 데이트는 전부 랜덤이다.">
 <meta property="og:image" content="https://dav3411.github.io/random-date/og.png?v=2">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -402,7 +402,7 @@
         <h1 class="home-title">랜덤 역 데이트</h1>
         <div class="home-copy">
           <p class="home-q">‘아무거나’라고 했지?</p>
-          <p class="home-a">그럼 진짜 아무 역에 내려서 아무거나 먹고 아무거나 한다. 무르기 없음.</p>
+          <p class="home-a">그럼 오늘 데이트는 전부 랜덤이다.</p>
         </div>
       </div>
       <button id="start" class="btn btn-primary home-start" type="button">가보자고</button>
@@ -1248,16 +1248,33 @@
     const loadRecent = () => { const sn = store.get(LAST_KEY); return resolveSnap(sn) ? sn : null; };
 
     // 공유 링크: 받은 사람도 같은 코스 화면으로 열립니다.
+    // 주소는 메시지에 그대로 보이므로 짧게: ?c=호선-역-밥-디저트-놀거리 (호선은 ID, 나머지는 각 목록에서의 순번)
+    // 순번이라서 나중에 목록 순서를 바꾸면 예전에 보낸 링크는 다른 항목을 가리킬 수 있습니다.
     function shareUrl(sn) {
-      const u = new URL(location.pathname, location.origin);
-      const p = u.searchParams;
-      p.set('r', sn.region); p.set('l', sn.line);
-      p.set('s', sn.station.name); p.set('o', sn.station.origin); p.set('n', sn.station.n);
-      p.set('f', sn.food); p.set('d', sn.dessert); p.set('p', sn.play);
-      return u.toString();
+      const c = resolveSnap(sn);
+      const st = stationChoices(c.line).findIndex(x => x.name === c.station.name && x.origin === c.station.origin && x.n === c.station.n);
+      const code = [c.line.id, st, DECKS.food.indexOf(c.food), DECKS.dessert.indexOf(c.dessert), DECKS.play.indexOf(c.play)].join('-');
+      return new URL(location.pathname, location.origin) + '?c=' + code;
     }
     function snapFromUrl() {
       const p = new URLSearchParams(location.search);
+      const code = p.get('c');
+      if (code) {
+        const [lineId, ...rest] = code.split('-');
+        if (rest.length !== 4 || rest.some(v => !/^\d+$/.test(v))) return null;
+        const [si, fi, di, pi] = rest.map(Number);
+        const reg = REGIONS.find(r => r.lines.some(l => l.id === lineId));
+        const line = reg && reg.lines.find(l => l.id === lineId);
+        const st = line && stationChoices(line)[si];
+        const food = DECKS.food[fi], dessert = DECKS.dessert[di], play = DECKS.play[pi];
+        if (!st || !food || !dessert || !play) return null;
+        const sn = {
+          region: reg.id, line: line.id, station: { name: st.name, origin: st.origin, n: st.n },
+          food: food.label, dessert: dessert.label, play: play.label,
+        };
+        return resolveSnap(sn) ? sn : null;
+      }
+      // 예전에 보낸 긴 주소(?r=…&l=…&s=…)도 그대로 열립니다.
       if (!p.get('r') || !p.get('l') || !p.get('s')) return null;
       const sn = {
         region: p.get('r'), line: p.get('l'),
@@ -1744,32 +1761,34 @@
       toastTimer = setTimeout(() => { els.toast.textContent = ''; }, 4000);
     };
 
-    // 공유하기: 휴대폰 공유 창(카카오톡 등)으로 링크만 보내고, 없으면 링크를 복사합니다.
-    // 글자는 같이 보내지 않습니다. 받는 쪽에는 링크 미리보기(og 태그의 제목·설명·그림)가 뜹니다.
+    // 공유하기: 휴대폰 공유 창(카카오톡 등)으로 보내고, 없으면 복사합니다.
+    // 보내는 글은 뽑힌 것만 한 줄, 그 아래에 링크. 글과 링크를 한 덩어리로 넘겨서 메시지 하나로 갑니다.
+    // (링크 미리보기의 설명은 페이지에 고정된 글이라 코스마다 바꿀 수 없어서, 뽑힌 것은 메시지 글로 보냅니다.)
     els.share.addEventListener('click', async () => {
       const sn = view === 'snap' ? snap : snapFromState();
-      if (!resolveSnap(sn)) return;
-      const url = shareUrl(sn);
+      const c = resolveSnap(sn);
+      if (!c) return;
+      const message = `${c.line.name} ${stationLabel(c.station.name)} · ${sn.food} · ${sn.dessert} · ${sn.play}\n${shareUrl(sn)}`;
       if (navigator.share) {
         try {
-          await navigator.share({ url });
+          await navigator.share({ text: message });
           return;
         } catch (e) {
           if (e && e.name === 'AbortError') return; // 공유 창을 닫은 경우
         }
       }
       const showForManualCopy = () => {
-        els.copyText.textContent = url;
+        els.copyText.textContent = message;
         els.copyText.hidden = false;
         const range = document.createRange();
         range.selectNodeContents(els.copyText);
         const sel = window.getSelection();
         sel.removeAllRanges();
         sel.addRange(range);
-        toast('링크를 선택해 두었습니다. 복사해서 보내 주세요.');
+        toast('보낼 글을 선택해 두었습니다. 복사해서 보내 주세요.');
       };
       try {
-        navigator.clipboard.writeText(url).then(() => toast('공유 링크를 복사했습니다.'), showForManualCopy);
+        navigator.clipboard.writeText(message).then(() => toast('코스와 링크를 복사했습니다.'), showForManualCopy);
       } catch (e) { showForManualCopy(); }
     });
 
