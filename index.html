@@ -156,7 +156,7 @@
     position: relative; z-index: 1;
     display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 5px;
     width: 100%; padding: 0 2px; border: 0; background: transparent;
-    color: var(--muted); font: 500 .78rem/1.2 var(--font-body); text-align: center; cursor: pointer;
+    color: var(--muted); font: 500 .78rem/1.2 var(--font-body); text-align: center;
   }
   /* 정거장 이름. 뽑히면 이름 자리에 뽑힌 선택지(예: 5호선)가 들어갑니다. */
   .stop-label { max-width: 100%; word-break: keep-all; overflow-wrap: anywhere; }
@@ -172,7 +172,6 @@
   /* 호선이 뽑히면 지금 단계의 도넛도 그 호선 색으로 */
   .progress.has-line .is-current .stopbtn::before { border-color: var(--line-stroke); }
   .is-current .stop-label { color: var(--ink); font-weight: 600; }
-  .stopbtn[aria-disabled="true"] { cursor: default; }
 
   /* the step */
   .step { grid-row: 2; display: flex; flex-direction: column; gap: 22px; min-width: 0; }
@@ -1127,13 +1126,11 @@
         const picked = !!value;
         const current = state.step === i;
         const li = make('li', [current && 'is-current', picked && !current && 'is-done', (picked || current) && 'is-reached'].filter(Boolean).join(' '));
-        const b = make('button', 'stopbtn');
+        // 보여 주기만 합니다. 누르는 버튼이 아니어서 중간 단계로 건너가 바꿀 수 없습니다.
+        const b = make('span', 'stopbtn');
         b.append(make('span', 'stop-label' + (picked ? ' is-picked' : ''), value || STEPS[i].short));
         b.setAttribute('aria-label', picked ? `${STEPS[i].short}: ${value}` : STEPS[i].short);
-        b.type = 'button';
-        b.setAttribute('aria-disabled', String(!reachable(i)));
         if (current) b.setAttribute('aria-current', 'step');
-        b.addEventListener('click', () => go(i));
         li.append(b);
         return li;
       }));
@@ -1941,18 +1938,24 @@
       if (performance.now() < nextLockUntil) return;
       go(state.step + 1);
     });
+    // 이전: 뽑기는 한 줄로 이어진 과정이라, 이전은 "마지막으로 뽑은 것을 지우고 다시 뽑기"입니다.
+    //  - 결과 화면이면 이 단계에서 뽑은 것을 지우고 이 단계의 뽑기 전 화면으로
+    //  - 뽑기 전 화면(또는 코스 화면)이면 앞 단계로 가서 그 단계에서 뽑은 것을 지움
+    // 어느 쪽이든 그 뒤로 뽑은 것도 모두 지워져서, 중간 것만 바꾸고 뒤를 남기는 일은 없습니다.
     els.back.addEventListener('click', () => {
       if (busy) return;
       const i = state.step;
-      if (isDrawStep(i) && state[STEPS[i].key] && !chooserShown()) {
-        // 결과 화면 → 같은 단계의 뽑기 전 화면(호선·종류 목록)으로. 거기서 다시 뽑을 수 있습니다.
-        choosing = true;
-        setMsg('');
-        render();
-        window.scrollTo(0, 0);
-        return;
-      }
-      go(i - 1);
+      const j = isDrawStep(i) && state[STEPS[i].key] ? i : i - 1;
+      if (j < 0) return;
+      for (let k = j; k < DONE; k++) state[STEPS[k].key] = null;
+      state.step = j;
+      choosing = false;
+      save();
+      setMsg('');
+      els.toast.textContent = '';
+      render();
+      window.scrollTo(0, 0);
+      els.title.focus({ preventScroll: true });
     });
 
     let toastTimer;
