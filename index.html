@@ -73,6 +73,7 @@
   }
   /* 화면 높이를 다 쓰고, 버튼 묶음은 화면 맨 아래에 붙입니다. */
   .wrap {
+    position: relative; z-index: 1;
     max-width: 560px; margin-inline: auto; display: grid; gap: 20px; grid-template-rows: auto 1fr;
     min-height: calc(100vh - 24px - env(safe-area-inset-top, 0px));
     min-height: calc(100svh - 24px - env(safe-area-inset-top, 0px));
@@ -97,16 +98,41 @@
     position: relative; top: -1px;
   }
 
-  /* 처음 화면 */
-  .home { display: grid; gap: 32px; padding-top: 10vh; }
+  /* 처음 화면: 가운데 정렬. 제목, 한마디, 시작 버튼, 그 아래 카드(이어서 뽑기 · 최근 코스) */
+  .home {
+    flex: 1; display: grid; align-content: center; justify-items: center; gap: 26px;
+    padding-block: 24px; text-align: center;
+  }
+  .home-head { position: relative; display: grid; justify-items: center; gap: 22px; }
+  /* 글자 뒤로는 배경 선이 부드럽게 옅어지도록 바탕색을 둥글게 깔아 둡니다. */
+  .home-head::before {
+    content: ""; position: absolute; inset: -44px -16px; z-index: -1; pointer-events: none;
+    background: radial-gradient(closest-side, var(--bg) 64%, transparent);
+  }
   .home-title { margin: 0; font: 400 clamp(3.6rem, 19vw, 6rem)/.95 var(--font-display); }
-  .recent { display: grid; gap: 10px; }
-  .recent-card {
-    width: 100%; text-align: left; display: grid; gap: 6px; padding: 14px 16px;
+  .home-copy { display: grid; gap: 8px; max-width: 21em; }
+  .home-q { font: 400 1.4rem/1.3 var(--font-display); }
+  .home-a { color: var(--muted); font-size: .98rem; }
+  .home .home-start { width: auto; padding: 18px 58px; border-radius: 999px; font-size: 1.25rem; }
+  .home-cards { width: 100%; display: grid; gap: 10px; }
+  .home-card {
+    width: 100%; text-align: left; display: grid; gap: 5px; padding: 13px 16px 14px;
     background: var(--surface); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px;
     font: inherit; cursor: pointer;
   }
-  .recent-card:hover { border-color: var(--ink); }
+  .home-card:hover { border-color: var(--ink); }
+  .home-card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .home-card-label { font: 600 .78rem/1.2 var(--font-body); letter-spacing: .04em; color: var(--muted); }
+  .home-card .recent-line { font-size: 1.35rem; }
+
+  /* 처음 화면 배경: 노선도처럼 꺾이는 색 선이 천천히 그려졌다 지워집니다. 양 끝은 도넛 */
+  .home-bg { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; opacity: .5; }
+  .home-bg path { fill: none; stroke: var(--c); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+  .home-bg circle { fill: var(--bg); stroke: var(--c); stroke-width: 4; }
+  @media (prefers-color-scheme: dark) {
+    .home-bg { opacity: .62; }
+    .home-bg path, .home-bg circle { stroke: color-mix(in srgb, var(--c) 76%, #FFFFFF); }
+  }
   .recent-line { display: flex; align-items: center; gap: 8px; font: 400 1.5rem/1.2 var(--font-display); }
   .recent-items { font-size: .95rem; word-break: keep-all; }
   .recent-date { font-size: .8rem; color: var(--muted); }
@@ -333,6 +359,7 @@
 </style>
 </head>
 <body>
+<svg class="home-bg" id="home-bg" aria-hidden="true" hidden></svg>
 <div class="wrap">
   <header class="bar" id="bar">
     <div class="bar-top">
@@ -346,10 +373,17 @@
   <main class="step">
     <!-- 처음 화면: 제목, 가장 최근 코스 하나 -->
     <section class="home" id="home" hidden>
-      <h1 class="home-title">랜덤 데이트</h1>
-      <div class="recent" id="recent" hidden>
-        <h2 class="label">최근 코스</h2>
-        <button class="recent-card" id="recent-card" type="button"></button>
+      <div class="home-head">
+        <h1 class="home-title">랜덤 데이트</h1>
+        <div class="home-copy">
+          <p class="home-q">어디서 뭐 할지, 또 고민 중인가요?</p>
+          <p class="home-a">‘아무거나’는 이제 그만. 내릴 역부터 밥, 디저트, 놀거리까지 전부 뽑기에 맡겨 보세요.</p>
+        </div>
+      </div>
+      <button id="start" class="btn btn-primary home-start" type="button">시작하기</button>
+      <div class="home-cards">
+        <button class="home-card" id="resume-card" type="button" hidden></button>
+        <button class="home-card" id="recent-card" type="button" hidden></button>
       </div>
     </section>
 
@@ -422,11 +456,9 @@
     <ol class="course" id="course" hidden></ol>
 
     <div class="actions" id="actions">
-      <button id="start" class="btn btn-primary" type="button" hidden>시작하기</button>
       <button id="draw" class="btn btn-primary" type="button" hidden>뽑기</button>
       <button id="next" class="btn btn-primary" type="button" hidden>다음</button>
       <div class="actions-row">
-        <button id="start-new" class="btn" type="button" hidden>처음부터 새로</button>
         <button id="back" class="btn" type="button" hidden>이전</button>
         <button id="share" class="btn" type="button" hidden>공유하기</button>
         <button id="restart" class="btn" type="button" hidden>처음부터 다시</button>
@@ -521,9 +553,9 @@
       left: $('band-left'), order: $('order'), n: $('order-n'), right: $('band-right'),
       msg: $('msg'), course: $('course'),
       draw: $('draw'), next: $('next'), back: $('back'), share: $('share'), restart: $('restart'),
-      start: $('start'), startNew: $('start-new'), homeBtn: $('home-btn'),
+      start: $('start'), homeBtn: $('home-btn'),
       bar: $('bar'), progressNav: $('progress-nav'), stepHead: $('step-head'),
-      home: $('home'), recent: $('recent'), recentCard: $('recent-card'),
+      home: $('home'), resumeCard: $('resume-card'), recentCard: $('recent-card'),
       toast: $('toast'), copyText: $('copy-text'),
       filter: $('filter'), filterCount: $('filter-count'), chips: $('line-chips'),
       tabs: $('region-tabs'), panel: $('region-panel'),
@@ -1221,19 +1253,162 @@
     const inProgress = () => !!state.line && state.step < DONE;
 
     function renderHome() {
+      const lineRow = (line, station) => {
+        const el = make('span', 'recent-line');
+        el.append(dot(line), station ? `${line.name} ${stationLabel(station.name)}` : line.name);
+        return el;
+      };
+      // 카드 윗줄: 왼쪽에 카드 이름, 오른쪽에 덧붙이는 말(다음 단계 · 날짜)
+      const cardTop = (label, meta) => {
+        const el = make('span', 'home-card-top');
+        el.append(make('span', 'home-card-label', label), make('span', 'recent-date', meta));
+        return el;
+      };
+      // 이어서 뽑기: 뽑다 만 것이 있을 때만 시작 버튼 아래에 카드로
+      const line = inProgress() ? curLine() : null;
+      els.resumeCard.hidden = !line;
+      if (line) {
+        const picked = ['food', 'dessert', 'play'].map(k => state[k]).filter(Boolean);
+        const todo = STEPS.find((s, i) => i < DONE && !state[s.key]);
+        els.resumeCard.replaceChildren(
+          cardTop('이어서 뽑기', todo ? `다음: ${todo.title}` : '코스 보기'),
+          lineRow(line, state.station),
+          ...(picked.length ? [make('span', 'recent-items', picked.join(' · '))] : []),
+        );
+      }
+      // 최근 코스: 끝까지 뽑은 코스 하나
       const sn = loadRecent();
-      els.recent.hidden = !sn;
-      if (!sn) return;
-      const c = resolveSnap(sn);
-      const d = sn.at ? new Date(sn.at) : null;
-      const lineEl = make('span', 'recent-line');
-      lineEl.append(dot(c.line), `${c.line.name} ${stationLabel(c.station.name)}`);
-      els.recentCard.replaceChildren(
-        lineEl,
-        make('span', 'recent-items', [sn.food, sn.dessert, sn.play].join(' · ')),
-        ...(d ? [make('span', 'recent-date', `${d.getMonth() + 1}월 ${d.getDate()}일`)] : []),
-      );
+      els.recentCard.hidden = !sn;
+      if (sn) {
+        const c = resolveSnap(sn);
+        const d = sn.at ? new Date(sn.at) : null;
+        els.recentCard.replaceChildren(
+          cardTop('최근 코스', d ? `${d.getMonth() + 1}월 ${d.getDate()}일` : ''),
+          lineRow(c.line, c.station),
+          make('span', 'recent-items', [sn.food, sn.dessert, sn.play].join(' · ')),
+        );
+      }
     }
+
+    /* ---------- 처음 화면 배경 ---------- */
+
+    // 노선도처럼 가로·세로·45도로만 꺾이는 색 선. 한쪽 끝에서 천천히 뻗어 나가 잠시 머물렀다가,
+    // 출발한 쪽부터 따라가며 사라집니다. 양 끝은 종점 표시처럼 도넛 모양입니다.
+    const homeBg = (() => {
+      const svg = $('home-bg');
+      // from: 출발점(화면 너비·높이 비율). path: [방향, 길이]. 길이는 가로는 너비, 세로는 높이,
+      // 대각선은 둘 중 짧은 쪽에 대한 비율이라 어떤 화면 비율에서도 45도가 유지됩니다.
+      // at: 한 바퀴 중 어디쯤에서 시작할지. 고르게 어긋나 있어서 한 번에 한두 개만 움직이고,
+      //     위쪽·아래쪽 선이 같이 비지 않습니다.
+      const ROUTES = [
+        // 가운데 글자 자리는 비워 두고 위·아래와 양옆 가장자리로만 지나갑니다.
+        { c: '#00A84D', from: [.08, .07], path: [['E', .50], ['SE', .20], ['S', .06]], at: .37 },
+        { c: '#0052A4', from: [.10, .21], path: [['E', .20], ['NE', .10], ['E', .18]], at: .87 },
+        { c: '#EF7C1C', from: [.94, .16], path: [['S', .46], ['SW', .10]], at: .53 },
+        { c: '#00A5DE', from: [.06, .37], path: [['S', .35], ['SE', .16], ['E', .36]], at: .20 },
+        { c: '#996CAC', from: [.10, .92], path: [['E', .22], ['NE', .10], ['E', .26]], at: .70 },
+        { c: '#E6186C', from: [.40, .965], path: [['E', .28], ['NE', .16]], at: .03 },
+      ];
+      const DIR = { E: [1, 0], W: [-1, 0], S: [0, 1], N: [0, -1], SE: [1, 1], SW: [-1, 1], NE: [1, -1], NW: [-1, -1] };
+      // CYCLE: 선 하나가 뻗고, 머물고, 사라지기까지 한 바퀴(초). 모든 선이 같아서 어긋난 간격이 유지되고,
+      // 대부분의 시간은 다 그려진 채 머물러 노선도처럼 보입니다. REST: 사라진 뒤 쉬는 시간
+      const CYCLE = 48, REST = 2, FADE = .7, BEND = 18, RING = 6.5;
+      const ease = p => p * p * (3 - 2 * p);
+      const clamp01 = v => Math.max(0, Math.min(1, v));
+      const svgEl = (tag, attrs) => {
+        const n = document.createElementNS(SVGNS, tag);
+        for (const [k, v] of Object.entries(attrs || {})) n.setAttribute(k, v);
+        return n;
+      };
+      let lines = [], raf = 0, t0 = 0, builtW = 0, builtH = 0;
+
+      function build() {
+        const W = window.innerWidth, H = window.innerHeight, m = Math.min(W, H);
+        builtW = W; builtH = H;
+        const speed = Math.max(55, m * .15); // 초당 px. 큰 화면에서는 조금 빠르게
+        // viewBox 없이 화면 px 그대로 그립니다. 주소창이 접혀 높이가 조금 바뀌어도 그림이 늘어나지 않습니다.
+        svg.replaceChildren();
+        lines = ROUTES.map(r => {
+          let x = r.from[0] * W, y = r.from[1] * H;
+          const pts = [[x, y]];
+          for (const [dir, len] of r.path) {
+            const [dx, dy] = DIR[dir];
+            const px = len * (dx && dy ? m : dx ? W : H);
+            x += dx * px; y += dy * px;
+            pts.push([x, y]);
+          }
+          // 꺾이는 곳은 둥글게
+          const toward = (a, b) => {
+            const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+            const k = Math.min(BEND, d / 2) / d;
+            return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
+          };
+          const f = p => p.map(v => v.toFixed(1)).join(' ');
+          let d = 'M' + f(pts[0]);
+          for (let i = 1; i < pts.length - 1; i++) {
+            d += ` L${f(toward(pts[i], pts[i - 1]))} Q${f(pts[i])} ${f(toward(pts[i], pts[i + 1]))}`;
+          }
+          d += ' L' + f(pts[pts.length - 1]);
+          const g = svgEl('g');
+          g.style.setProperty('--c', r.c);
+          const path = svgEl('path', { d });
+          const tail = svgEl('circle', { r: RING });
+          const head = svgEl('circle', { r: RING });
+          g.append(path, tail, head);
+          svg.append(g);
+          const len = path.getTotalLength();
+          const run = len / speed;
+          const hold = Math.max(6, CYCLE - REST - run * 2);
+          return { g, path, tail, head, len, run, hold, cycle: run * 2 + hold + REST, at: r.at };
+        });
+      }
+
+      function place(ln, a, b, opacity) {
+        // 머무는 동안에는 값이 그대로라 아무것도 다시 그리지 않습니다.
+        const key = `${a.toFixed(1)} ${b.toFixed(1)} ${opacity.toFixed(2)}`;
+        if (ln.key === key) return;
+        ln.key = key;
+        ln.path.setAttribute('stroke-dasharray', `${Math.max(0, b - a).toFixed(1)} ${(ln.len + 20).toFixed(1)}`);
+        ln.path.setAttribute('stroke-dashoffset', (-a).toFixed(1));
+        const pa = ln.path.getPointAtLength(a), pb = ln.path.getPointAtLength(b);
+        ln.tail.setAttribute('cx', pa.x.toFixed(1)); ln.tail.setAttribute('cy', pa.y.toFixed(1));
+        ln.head.setAttribute('cx', pb.x.toFixed(1)); ln.head.setAttribute('cy', pb.y.toFixed(1));
+        ln.g.setAttribute('opacity', opacity.toFixed(2));
+      }
+
+      function frame(now) {
+        const sec = (now - t0) / 1000;
+        for (const ln of lines) {
+          const t = (sec + ln.at * ln.cycle) % ln.cycle;
+          const gone = ln.run * 2 + ln.hold;
+          if (t >= gone) { place(ln, ln.len, ln.len, 0); continue; }
+          const a = t > ln.run + ln.hold ? ease((t - ln.run - ln.hold) / ln.run) * ln.len : 0;
+          const b = t < ln.run ? ease(t / ln.run) * ln.len : ln.len;
+          place(ln, a, b, clamp01(Math.min(t, gone - t) / FADE));
+        }
+        raf = requestAnimationFrame(frame);
+      }
+
+      function show() {
+        svg.removeAttribute('hidden'); // 길이를 재려면 화면에 그려져 있어야 합니다
+        const W = window.innerWidth, H = window.innerHeight;
+        // 휴대폰 주소창이 접히며 높이만 조금 바뀔 때는 다시 그리지 않습니다.
+        if (!lines.length || W !== builtW || Math.abs(H - builtH) > 120) build();
+        cancelAnimationFrame(raf);
+        if (reduceMotion.matches) {
+          for (const ln of lines) place(ln, 0, ln.len, 1); // 움직임 줄이기: 다 그려진 채로 가만히
+          return;
+        }
+        if (!t0) t0 = performance.now();
+        raf = requestAnimationFrame(frame);
+      }
+      function hide() {
+        cancelAnimationFrame(raf);
+        svg.setAttribute('hidden', '');
+      }
+      window.addEventListener('resize', () => { if (!svg.hasAttribute('hidden')) show(); });
+      return { show, hide };
+    })();
     function openSnap(sn, kind) {
       snap = sn;
       snapKind = kind;
@@ -1272,9 +1447,7 @@
 
     function syncActions() {
       const homeView = view === 'home', snapView = view === 'snap';
-      els.start.hidden = !homeView;
-      els.start.textContent = inProgress() ? '이어서 뽑기' : '시작하기';
-      els.startNew.hidden = !(homeView && inProgress());
+      els.actions.hidden = homeView; // 처음 화면의 버튼(시작하기·카드)은 화면 가운데에 따로 있습니다
       els.homeBtn.hidden = !snapView;
       if (homeView || snapView) {
         for (const b of [els.draw, els.next, els.back, els.restart]) b.hidden = true;
@@ -1305,6 +1478,7 @@
       els.progressNav.hidden = snapView;
       els.stepHead.hidden = homeView;
       els.copyText.hidden = true;
+      if (homeView) homeBg.show(); else homeBg.hide();
       if (homeView || snapView) {
         for (const el of [els.filter, els.catFilter, els.sign, els.item]) el.hidden = true;
         els.course.hidden = !snapView;
@@ -1412,8 +1586,8 @@
       goHome();
     });
     els.homeBtn.addEventListener('click', goHome);
-    els.start.addEventListener('click', () => startSteps(!inProgress()));
-    els.startNew.addEventListener('click', () => startSteps(true));
+    els.start.addEventListener('click', () => startSteps(true));       // 시작하기는 늘 처음부터
+    els.resumeCard.addEventListener('click', () => startSteps(false)); // 뽑던 곳에서 이어서
     els.recentCard.addEventListener('click', () => { const sn = loadRecent(); if (sn) openSnap(sn, 'recent'); });
     $('brand').addEventListener('click', goHome);
 
