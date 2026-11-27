@@ -329,30 +329,34 @@
     background: color-mix(in srgb, var(--surface) 80%, transparent);
   }
   .map-credit a { color: inherit; }
-  /* 밥·디저트·놀거리 종류: 한 줄에 종류 하나. 왼쪽 버튼으로 고르고, 오른쪽(○개 ⌄)을 누르면 그 종류의 항목이 펼쳐집니다.
-     처음에는 다 접혀 있습니다. */
-  .cats { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-  .cat-row { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; }
-  .cat {
-    padding: 7px 12px; border-radius: 999px;
+  /* 밥·디저트·놀거리 종류: 알약(종류 이름 + ⌄)들이 줄줄이 붙어 흐릅니다. 이름을 누르면 고르기/빼기,
+     ⌄를 누르면 그 종류의 항목이 바로 아래 한 줄을 다 써서 펼쳐집니다. 처음에는 다 접혀 있습니다. */
+  .cats { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .cat-row { display: contents; }
+  .cat-pill {
+    display: inline-flex; align-items: stretch; border-radius: 999px;
     border: 1.5px solid var(--ink); background: var(--ink); color: var(--bg);
-    font: 600 .88rem/1.2 var(--font-body); cursor: pointer; white-space: nowrap;
+    font: 600 .88rem/1.2 var(--font-body); white-space: nowrap;
   }
-  .cat[aria-pressed="false"] { background: transparent; border-color: var(--rule); color: var(--muted); }
-  /* 펼치기·접기: 종류 버튼 오른쪽 나머지 줄 전체가 누르는 자리 */
+  .cat-row.is-off .cat-pill { background: transparent; border-color: var(--rule); color: var(--muted); }
+  .cat-pill button { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+  .cat { padding: 7px 6px 7px 13px; }
+  /* 펼치기 버튼: 알약 오른쪽 끝, 이름과는 옅은 선으로 나눕니다. */
   .cat-more {
-    display: flex; align-items: center; justify-content: flex-end; gap: 9px;
-    min-height: 38px; padding: 0 4px 0 12px; border: 0; background: none; cursor: pointer;
-    color: var(--muted); font: 500 .82rem/1 var(--font-body);
+    display: grid; place-items: center; width: 32px; padding: 0 3px 0 0;
+    border-left: 1px solid color-mix(in srgb, currentColor 28%, transparent) !important;
+    margin: 6px 0;
   }
-  .cat-more:hover { color: var(--ink); }
   .cat-more::after {
-    content: ""; flex: none; width: 7px; height: 7px; margin-top: -4px;
+    content: ""; width: 6px; height: 6px; margin-top: -3px;
     border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
     transform: rotate(45deg); transition: transform .15s;
   }
-  .cat-more[aria-expanded="true"]::after { transform: rotate(-135deg); margin-top: 4px; }
-  .cat-items { grid-column: 1 / -1; padding: 4px 4px 8px; font-size: .86rem; line-height: 1.55; color: var(--ink); word-break: keep-all; }
+  .cat-more[aria-expanded="true"]::after { transform: rotate(-135deg); margin-top: 3px; }
+  .cat-items {
+    flex: 0 0 100%; margin: 0; padding: 9px 12px; border-radius: 6px;
+    background: var(--surface); font-size: .86rem; line-height: 1.55; color: var(--ink); word-break: keep-all;
+  }
   .cat-row.is-off .cat-items { color: var(--muted); opacity: .55; text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 50%, transparent); }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip {
@@ -1233,22 +1237,24 @@
           setMsg('');
           renderCats();
         });
-        // 세부 항목: 오른쪽의 "○개 ⌄"를 누르면 펼치고 접습니다.
+        // 세부 항목: 알약 안 오른쪽의 ⌄를 누르면 펼치고 접습니다.
         const list = make('p', 'cat-items', items.map(i => i.label).join(' · '));
         list.id = `cat-items-${idx}`;
         list.hidden = !open.has(cat);
-        const more = make('button', 'cat-more', `${items.length}개`);
+        const more = make('button', 'cat-more');
         more.type = 'button';
         more.setAttribute('aria-expanded', String(open.has(cat)));
         more.setAttribute('aria-controls', list.id);
-        more.setAttribute('aria-label', `${cat} 항목 ${items.length}개`);
+        more.setAttribute('aria-label', `${cat} 항목 ${items.length}개 보기`);
         more.addEventListener('click', () => {
           const show = !open.has(cat);
           if (show) open.add(cat); else open.delete(cat);
           more.setAttribute('aria-expanded', String(show));
           list.hidden = !show;
         });
-        li.append(b, more, list);
+        const pill = make('span', 'cat-pill');
+        pill.append(b, more);
+        li.append(pill, list);
         return li;
       }));
     }
