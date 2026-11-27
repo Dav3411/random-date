@@ -282,9 +282,9 @@
   <p class="sr-only" id="live" aria-live="polite"></p>
 </div>
 
-<script src="data.js"></script>
 <script>
-  (() => {
+  // data.js가 로드된 뒤에 실행됩니다. (맨 아래에서 불러옵니다.)
+  function start() {
     'use strict';
     const $ = id => document.getElementById(id);
     const root = document.documentElement;
@@ -804,6 +804,19 @@
     });
 
     render();
+  }
+
+  // 노선 데이터(data.js)를 불러옵니다. 주소에 이 문서의 수정 시각을 붙여서, 사이트를 새로 올린
+  // 직후에 브라우저에 남아 있던 예전 data.js가 새 화면과 섞여 쓰이지 않게 합니다.
+  // (GitHub Pages는 올릴 때마다 문서의 수정 시각이 바뀝니다.)
+  (() => {
+    const s = document.createElement('script');
+    s.src = 'data.js?v=' + encodeURIComponent(document.lastModified);
+    s.onload = start;
+    s.onerror = () => {
+      document.getElementById('lede').textContent = '노선 데이터를 불러오지 못했습니다. 새로고침해 주세요.';
+    };
+    document.head.append(s);
   })();
 </script>
 </body>
