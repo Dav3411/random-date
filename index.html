@@ -368,12 +368,31 @@
   .chip.is-num { width: 42px; padding: 0; font-size: 1.3rem; }
   .chip[aria-pressed="false"] { background: transparent; border-color: var(--rule); color: var(--muted); }
 
-  /* final course */
-  .course { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
-  .course li {
-    display: grid; grid-template-columns: 4.2em minmax(0, 1fr); gap: 10px; align-items: baseline;
-    padding: 14px 0; border-bottom: 1px solid var(--rule);
+  /* 코스(결과): 항목 앞에 세로 노선 — 도넛(역) ─ 선 ─ 도넛 … 뽑힌 호선 색으로.
+     도넛은 각 줄의 값 첫 줄 높이 가운데(--stop)에 오고, 선은 그 도넛에서 다음 줄 도넛까지 이어집니다.
+     줄 사이 구분선은 노선 오른쪽부터 그어서 노선을 가로지르지 않습니다. */
+  .course {
+    --rail: 36px; --stop: calc(14px + .96rem);
+    list-style: none; margin: 0; padding: 0;
+    background: linear-gradient(var(--rule), var(--rule)) no-repeat var(--rail) 0 / calc(100% - var(--rail)) 1px;
   }
+  .course li {
+    position: relative;
+    display: grid; grid-template-columns: 4.2em minmax(0, 1fr); gap: 10px; align-items: baseline;
+    padding: 14px 0 14px var(--rail);
+    background: linear-gradient(var(--rule), var(--rule)) no-repeat var(--rail) 100% / calc(100% - var(--rail)) 1px;
+  }
+  .course li::before, .course li::after { content: ""; position: absolute; pointer-events: none; }
+  .course li::before {
+    left: 0; top: calc(var(--stop) - 11px); z-index: 1;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--bg); border: 5px solid var(--line-stroke, var(--ink));
+  }
+  .course li::after {
+    left: 8.5px; width: 5px; top: var(--stop); bottom: calc(-1 * var(--stop));
+    background: var(--line-stroke, var(--ink));
+  }
+  .course li:last-child::after { display: none; }
   .course .k { font-size: .82rem; font-weight: 600; letter-spacing: .05em; color: var(--muted); }
   .course .v { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; font: 400 1.6rem/1.2 var(--font-display); }
   .course .v a { color: var(--ink); text-underline-offset: 4px; text-decoration-thickness: 1.5px; }
@@ -1904,7 +1923,8 @@
       const homeView = view === 'home', snapView = view === 'snap';
       els.home.hidden = !homeView;
       els.bar.hidden = homeView;
-      els.progressNav.hidden = snapView;
+      // 위쪽 진행도는 뽑는 동안에만. 코스(결과) 화면에서는 코스 목록 자체가 노선처럼 보입니다.
+      els.progressNav.hidden = snapView || (view === 'steps' && state.step === DONE);
       els.stepHead.hidden = homeView;
       els.copyText.hidden = true;
       if (homeView) homeBg.show(); else homeBg.hide();
