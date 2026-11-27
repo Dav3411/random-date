@@ -123,9 +123,35 @@
   .lede { color: var(--muted); }
   .msg { font-size: .92rem; font-weight: 500; }
 
+  /* 뽑힌 역·항목 카드 전체가 네이버 지도 링크. 오른쪽 위에 작은 표시 */
+  .card-link { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
+  .card-link:focus-visible { outline-offset: -3px; }
+  .card-link-hint {
+    position: absolute; top: 10px; right: 10px; padding: 4px 9px; border-radius: 999px;
+    background: color-mix(in srgb, var(--surface) 88%, transparent); border: 1px solid var(--rule);
+    color: var(--ink); font: 600 .74rem/1.2 var(--font-body);
+  }
+  @media (hover: hover) { .card-link:hover .card-link-hint { border-color: var(--ink); } }
+
+  /* 밥·디저트·놀거리 카드: 사진 + 이름 (역명판 디자인과 별개, 기본 글꼴) */
+  .item-card { position: relative; margin: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+  .item-credit { position: relative; z-index: 2; }
+  .item-photo {
+    position: relative; aspect-ratio: 4 / 3; max-width: 100%;
+    background: repeating-linear-gradient(135deg, var(--bg) 0 10px, var(--surface) 10px 20px);
+  }
+  .item-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .item-body { display: grid; gap: 4px; padding: 14px 16px 16px; }
+  .item-cat { font-size: .85rem; font-weight: 600; color: var(--muted); }
+  .item-name { font: 400 clamp(2rem, 9vw, 2.8rem)/1.1 var(--font-display); overflow-wrap: anywhere; }
+  .item-card.is-rolling .item-name { color: var(--muted); }
+  .item-credit { font-size: .7rem; color: var(--muted); overflow-wrap: anywhere; }
+  .item-credit a { color: inherit; }
+
   /* station sign: every draw result is shown on it */
   .sign {
     --sign-font: var(--font-display); --sign-weight: 400;
+    position: relative;
     background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; padding-bottom: 20px;
   }
   .badge, .sign-name, .sign-band, .sign-order b { font-family: var(--sign-font) !important; font-weight: var(--sign-weight) !important; }
@@ -327,7 +353,18 @@
       <ul class="cats" id="cat-list"></ul>
     </section>
 
+    <figure class="item-card" id="item-card" hidden>
+      <a class="card-link" id="item-link" target="_blank" rel="noopener" hidden><span class="card-link-hint">네이버 지도 ↗</span></a>
+      <div class="item-photo" id="item-photo"><img id="item-img" alt="" decoding="async" hidden></div>
+      <figcaption class="item-body">
+        <span class="item-cat" id="item-cat"></span>
+        <strong class="item-name" id="item-name"></strong>
+        <small class="item-credit" id="item-credit" hidden></small>
+      </figcaption>
+    </figure>
+
     <div class="sign" id="sign" hidden>
+      <a class="card-link" id="sign-link" target="_blank" rel="noopener" hidden><span class="card-link-hint">네이버 지도 ↗</span></a>
       <div class="sign-top">
         <span class="badge" id="badge" hidden></span>
         <div class="sign-name is-empty" id="sign-name">?</div>
@@ -434,6 +471,8 @@
     const els = {
       progress: $('progress'), title: $('title'),
       sign: $('sign'), badge: $('badge'), name: $('sign-name'), band: $('band'),
+      signLink: $('sign-link'), itemLink: $('item-link'),
+      item: $('item-card'), itemImg: $('item-img'), itemCat: $('item-cat'), itemName: $('item-name'), itemCredit: $('item-credit'),
       left: $('band-left'), order: $('order'), n: $('order-n'), right: $('band-right'),
       msg: $('msg'), course: $('course'),
       draw: $('draw'), next: $('next'), back: $('back'), copy: $('copy'), restart: $('restart'),
@@ -476,18 +515,57 @@
     // 호선 뽑기 화면은 이름이 곧 호선이라 동그라미를 따로 달지 않습니다. (② 2호선처럼 겹치지 않게)
     const lineView = l => ({ line: l, noBadge: true, name: l.name, left: region().name, right: `${stationCount(l)}개 역` });
     const stationView = (l, s) => ({
-      line: l, name: stationLabel(s.name), n: s.n,
+      line: l, name: stationLabel(s.name), n: s.n, mapQuery: stationQuery(s.name),
       left: s.prev ? '‹ ' + s.prev : '종점',
       right: s.next ? s.next + ' ›' : '종점',
     });
-    const itemView = i => ({ name: i.label, left: i.cat });
+    function setCardLink(a, query, label) {
+      a.hidden = !query;
+      if (query) {
+        a.href = mapUrl(query);
+        a.setAttribute('aria-label', label || query);
+      } else {
+        a.removeAttribute('href');
+      }
+    }
+
+    // 밥·디저트·놀거리 카드. 돌아가는 동안에는 이름만 바꾸고(사진을 한꺼번에 받지 않게), 멈추면 사진을 보여 줍니다.
+    const isItemStep = key => !!DECKS[key];
+    const photoOf = (key, label) => (typeof PHOTOS !== 'undefined' && PHOTOS[key] && PHOTOS[key][label]) || null;
+    function paintItem(key, item, spinning) {
+      els.itemCat.textContent = item ? item.cat : '';
+      els.itemName.textContent = item ? item.label : '뽑는 중';
+      // 누르면 뽑힌 역 근처에서 이 항목을 네이버 지도로 찾습니다.
+      const near = state.station ? stationQuery(state.station.name) + ' ' : '';
+      setCardLink(els.itemLink, !spinning && item ? near + item.q : null, item && `${near}${item.label} 네이버 지도에서 찾기`);
+      const p = !spinning && item ? photoOf(key, item.label) : null;
+      if (p) {
+        if (els.itemImg.getAttribute('src') !== p.src) {
+          els.itemImg.hidden = true;
+          els.itemImg.onload = () => { els.itemImg.hidden = false; };
+          els.itemImg.src = p.src;
+        } else {
+          els.itemImg.hidden = false;
+        }
+        els.itemImg.alt = item.label;
+        const a = make('a', null, `${p.author || '작성자 미상'} · ${p.license}`);
+        a.href = p.page;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        els.itemCredit.replaceChildren('사진: ', a, ' (위키미디어 공용)');
+        els.itemCredit.hidden = false;
+      } else {
+        els.itemImg.hidden = true;
+        els.itemImg.removeAttribute('src');
+        els.itemCredit.hidden = true;
+      }
+    }
 
     function signFor(key) {
       const line = curLine();
       if (key === 'line') return line ? lineView(line) : { name: '?', empty: true };
       if (key === 'station') return state.station ? stationView(line, state.station) : { line, name: '?', empty: true, n: '?' };
-      const item = itemOf(key);
-      return item ? itemView(item) : { name: '?', empty: true };
+      return { name: '?', empty: true };
     }
 
     // 역명판 글꼴: 노선(없으면 뽑힌 호선, 그것도 없으면 지역)의 실제 역명판 글꼴
@@ -547,6 +625,8 @@
         els.badge.style.color = line.on;
       }
       els.name.textContent = v.name;
+      // 역 결과는 누르면 네이버 지도로 (돌아가는 동안은 아님)
+      setCardLink(els.signLink, !rolling && v.mapQuery ? v.mapQuery : null, v.mapQuery && `${v.name} 네이버 지도에서 보기`);
       els.name.classList.toggle('is-empty', !!v.empty);
       els.name.classList.toggle('is-long', !v.empty && v.name.length >= 7);
       els.order.hidden = v.n == null;
@@ -590,6 +670,7 @@
         rolling = null;
         busy = false;
         els.sign.classList.remove('is-rolling');
+        els.item.classList.remove('is-rolling');
         commit(value);
       };
       choosing = false; // 뽑기를 시작하면 호선 목록은 닫습니다(후보가 하나라 바로 정해져도).
@@ -613,13 +694,15 @@
           finish(value);
         },
       };
-      els.sign.classList.add('is-rolling');
+      const itemStep = isItemStep(STEPS[state.step].key);
+      const card = itemStep ? els.item : els.sign;
+      card.classList.add('is-rolling');
       const wasChoosing = !els.filter.hidden || !els.catFilter.hidden;
       els.filter.hidden = true;
       els.catFilter.hidden = true;
-      els.sign.hidden = false;
+      card.hidden = false;
       if (wasChoosing) window.scrollTo(0, 0);
-      if (still) paintSign({ name: '뽑는 중', empty: true }); else tick();
+      if (still) { if (itemStep) paintItem(STEPS[state.step].key, null, true); else paintSign({ name: '뽑는 중', empty: true }); } else tick();
       setMsg('');
       syncActions();
       els.draw.focus({ preventScroll: true });
@@ -680,7 +763,7 @@
       // 지금 것을 빼고 돌리되, 그러면 하나만 남는 경우는 다 돌립니다.
       const others = on.filter(i => i.label !== state[key]);
       const pool = others.length >= 2 ? others : on;
-      startRoll(pool, i => paintSign(itemView(i)), pick => {
+      startRoll(pool, i => paintItem(key, i, !!rolling), pick => {
         state[key] = pick.label;
         finishDraw(pick.label);
       });
@@ -1054,13 +1137,16 @@
       // 뽑기 창은 뽑은 결과가 있을 때만 보입니다. (돌아가는 동안은 startRoll이 보여 줍니다.)
       const kind = chooserKind();
       const chooser = !!kind;
-      els.sign.hidden = !(drawStep && !!state[key] && !chooser);
+      const showResult = drawStep && !!state[key] && !chooser;
+      els.sign.hidden = !(showResult && !isItemStep(key));
+      els.item.hidden = !(showResult && isItemStep(key));
       els.course.hidden = key !== 'done';
       els.filter.hidden = kind !== 'line';
       els.catFilter.hidden = kind !== 'cat';
       els.copyText.hidden = true;
 
-      if (drawStep) paintSign(signFor(key));
+      if (drawStep && !isItemStep(key)) paintSign(signFor(key));
+      if (isItemStep(key)) paintItem(key, itemOf(key), false);
       if (kind === 'line') renderFilter();
       if (kind === 'cat') renderCats();
       if (key === 'done') renderCourse();
@@ -1174,7 +1260,7 @@
     });
     load('data.js')
       // 좌표·경계가 없으면 지도만 빠지거나 바탕선 없이 그려지고, 뽑기는 그대로 됩니다.
-      .then(() => Promise.all([load('coords.js'), load('bounds.js')].map(p => p.catch(() => {}))))
+      .then(() => Promise.all([load('coords.js'), load('bounds.js'), load('photos.js')].map(p => p.catch(() => {}))))
       .then(start, () => {
         const lede = document.getElementById('lede');
         lede.textContent = '노선 데이터를 불러오지 못했습니다. 새로고침해 주세요.';
