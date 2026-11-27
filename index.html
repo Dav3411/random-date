@@ -986,8 +986,17 @@
         show(current);
       };
       const tick = () => { advance(); timer = setTimeout(tick, 70); };
-      // 멈추기를 누른 뒤 한 칸씩 넘어가는 간격(ms): 점점 길어지며 멈춥니다. 모두 합쳐 1초 남짓
-      const SLOW = [75, 100, 135, 185, 255, 340];
+      // 멈추기를 누른 뒤 한 칸씩 넘어가는 간격(ms): 처음엔 빠르다가 끝으로 갈수록 확 느려져서 쫄깃하게 멈춥니다.
+      // 몇 칸 더 갈지(8~13칸)와 마지막 칸의 뜸(0.55~0.75초)은 매번 랜덤이라, 언제 멈출지 알 수 없습니다.
+      // 모두 합쳐 대략 2~4초
+      const slowGaps = () => {
+        const n = 8 + Math.floor(Math.random() * 6);
+        const end = 550 + Math.random() * 200;
+        return Array.from({ length: n }, (_, k) => {
+          const t = k / (n - 1);
+          return Math.round(70 + (end - 70) * Math.pow(t, 2.1));
+        });
+      };
       busy = true;
       rolling = {
         stop() {
@@ -996,13 +1005,16 @@
           if (still) { const value = pickOne(pool); show(value); finish(value); return; }
           landing = true;
           syncActions();
+          const gaps = slowGaps();
           let k = 0;
           const step = () => {
-            if (k === SLOW.length) { finish(current); return; }
+            if (k === gaps.length) { finish(current); return; }
             advance();
-            card.animate([{ transform: 'translateY(-4px)' }, { transform: 'none' }], { duration: 140, easing: 'ease-out' });
+            // 느려질수록 한 칸 넘어갈 때 카드가 더 크게 들썩입니다.
+            const lift = 3 + 5 * (k / (gaps.length - 1));
+            card.animate([{ transform: `translateY(-${lift.toFixed(1)}px)` }, { transform: 'none' }], { duration: Math.min(220, 120 + gaps[k] / 4), easing: 'ease-out' });
             buzz(6);
-            timer = setTimeout(step, SLOW[k++]);
+            timer = setTimeout(step, gaps[k++]);
           };
           step();
         },
