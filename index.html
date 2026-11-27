@@ -85,7 +85,24 @@
   /* top bar: site name + progress route */
   .bar { display: grid; gap: 18px; }
   .bar-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
-  .brand { font: 400 1.2rem/1 var(--font-display); letter-spacing: .02em; }
+  .brand {
+    padding: 0; border: 0; background: none; color: var(--ink); cursor: pointer;
+    font: 400 1.2rem/1 var(--font-display); letter-spacing: .02em;
+  }
+
+  /* 처음 화면 */
+  .home { display: grid; gap: 32px; padding-top: 10vh; }
+  .home-title { margin: 0; font: 400 clamp(3.6rem, 19vw, 6rem)/.95 var(--font-display); }
+  .recent { display: grid; gap: 10px; }
+  .recent-card {
+    width: 100%; text-align: left; display: grid; gap: 6px; padding: 14px 16px;
+    background: var(--surface); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px;
+    font: inherit; cursor: pointer;
+  }
+  .recent-card:hover { border-color: var(--ink); }
+  .recent-line { display: flex; align-items: center; gap: 8px; font: 400 1.5rem/1.2 var(--font-display); }
+  .recent-items { font-size: .95rem; word-break: keep-all; }
+  .recent-date { font-size: .8rem; color: var(--muted); }
   .progress { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .progress li { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
   .progress li + li::before {
@@ -116,7 +133,8 @@
   .stopbtn[aria-disabled="true"] { cursor: default; }
 
   /* the step */
-  .step { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+  .step { grid-row: 2; display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+  .bar { grid-row: 1; }
   .step-head { display: grid; gap: 10px; }
   h1 { margin: 0; font: 400 clamp(3.2rem, 16vw, 5.5rem)/.98 var(--font-display); text-wrap: balance; }
   h1:focus { outline: none; }
@@ -309,17 +327,26 @@
 </head>
 <body>
 <div class="wrap">
-  <header class="bar">
+  <header class="bar" id="bar">
     <div class="bar-top">
-      <p class="brand">랜덤 데이트</p>
+      <button class="brand" id="brand" type="button" aria-label="처음 화면으로">랜덤 데이트</button>
     </div>
-    <nav aria-label="뽑힌 선택지">
+    <nav aria-label="뽑힌 선택지" id="progress-nav">
       <ol class="progress" id="progress"></ol>
     </nav>
   </header>
 
   <main class="step">
-    <div class="step-head">
+    <!-- 처음 화면: 제목, 가장 최근 코스 하나 -->
+    <section class="home" id="home" hidden>
+      <h1 class="home-title">랜덤 데이트</h1>
+      <div class="recent" id="recent" hidden>
+        <h2 class="label">최근 코스</h2>
+        <button class="recent-card" id="recent-card" type="button"></button>
+      </div>
+    </section>
+
+    <div class="step-head" id="step-head">
       <h1 id="title" tabindex="-1">호선 뽑기</h1>
       <p class="lede" id="lede" hidden></p>
     </div>
@@ -388,12 +415,15 @@
     <ol class="course" id="course" hidden></ol>
 
     <div class="actions" id="actions">
+      <button id="start" class="btn btn-primary" type="button" hidden>시작하기</button>
       <button id="draw" class="btn btn-primary" type="button" hidden>뽑기</button>
       <button id="next" class="btn btn-primary" type="button" hidden>다음</button>
       <div class="actions-row">
+        <button id="start-new" class="btn" type="button" hidden>처음부터 새로</button>
         <button id="back" class="btn" type="button" hidden>이전</button>
-        <button id="copy" class="btn" type="button" hidden>목록 복사</button>
+        <button id="share" class="btn" type="button" hidden>공유하기</button>
         <button id="restart" class="btn" type="button" hidden>처음부터 다시</button>
+        <button id="home-btn" class="btn" type="button" hidden>처음으로</button>
       </div>
       <p class="toast" id="toast" role="status"></p>
       <pre class="copy-text" id="copy-text" hidden></pre>
@@ -483,7 +513,10 @@
       item: $('item-card'), itemImg: $('item-img'), itemCat: $('item-cat'), itemName: $('item-name'), itemCredit: $('item-credit'),
       left: $('band-left'), order: $('order'), n: $('order-n'), right: $('band-right'),
       msg: $('msg'), course: $('course'),
-      draw: $('draw'), next: $('next'), back: $('back'), copy: $('copy'), restart: $('restart'),
+      draw: $('draw'), next: $('next'), back: $('back'), share: $('share'), restart: $('restart'),
+      start: $('start'), startNew: $('start-new'), homeBtn: $('home-btn'),
+      bar: $('bar'), progressNav: $('progress-nav'), stepHead: $('step-head'),
+      home: $('home'), recent: $('recent'), recentCard: $('recent-card'),
       toast: $('toast'), copyText: $('copy-text'),
       filter: $('filter'), filterCount: $('filter-count'), chips: $('line-chips'),
       tabs: $('region-tabs'), panel: $('region-panel'),
@@ -785,7 +818,7 @@
       state.step = i;
       choosing = false;
       save();
-      disarmRestart();
+      if (i === DONE) saveRecent(); // 끝까지 뽑은 코스는 처음 화면에서 다시 볼 수 있게 하나만 저장
       setMsg('');
       els.toast.textContent = '';
       render();
@@ -807,8 +840,8 @@
 
     /* ---------- 화면 그리기 ---------- */
 
-    function applyLineColor() {
-      const line = curLine();
+    function applyLineColor(override) {
+      const line = override === undefined ? curLine() : override;
       if (line) {
         root.style.setProperty('--line', line.color);
         root.style.setProperty('--on-line', line.on);
@@ -1097,9 +1130,60 @@
     $('cat-all-on').addEventListener('click', () => setAllCats(true));
     $('cat-all-off').addEventListener('click', () => setAllCats(false));
 
-    function renderCourse() {
-      const line = curLine();
-      const s = state.station;
+    /* ---------- 코스: 저장·공유 ---------- */
+
+    // 코스 한 벌: { region, line, station: { name, origin, n }, food, dessert, play, at }
+    const LAST_KEY = 'random-date-last';
+    const snapFromState = () => ({
+      region: state.region, line: state.line,
+      station: state.station && { name: state.station.name, origin: state.station.origin, n: state.station.n },
+      food: state.food, dessert: state.dessert, play: state.play, at: Date.now(),
+    });
+    // 코스를 지금 데이터로 풀어 봅니다. 맞지 않는 값이 있으면 null.
+    function resolveSnap(sn) {
+      if (!sn || typeof sn !== 'object') return null;
+      const reg = regionById[sn.region];
+      const line = reg && reg.lines.find(l => l.id === sn.line);
+      if (!line || !sn.station) return null;
+      const all = stationChoices(line);
+      const st = all.find(c => c.name === sn.station.name && c.origin === sn.station.origin && c.n === Number(sn.station.n))
+        || all.find(c => c.name === sn.station.name);
+      const items = {};
+      for (const k of ['food', 'dessert', 'play']) {
+        items[k] = DECKS[k].find(i => i.label === sn[k]);
+        if (!items[k]) return null;
+      }
+      return st ? { region: reg, line, station: st, ...items } : null;
+    }
+    function saveRecent() {
+      const sn = snapFromState();
+      if (resolveSnap(sn)) store.set(LAST_KEY, sn);
+    }
+    const loadRecent = () => { const sn = store.get(LAST_KEY); return resolveSnap(sn) ? sn : null; };
+
+    // 공유 링크: 받은 사람도 같은 코스 화면으로 열립니다.
+    function shareUrl(sn) {
+      const u = new URL(location.pathname, location.origin);
+      const p = u.searchParams;
+      p.set('r', sn.region); p.set('l', sn.line);
+      p.set('s', sn.station.name); p.set('o', sn.station.origin); p.set('n', sn.station.n);
+      p.set('f', sn.food); p.set('d', sn.dessert); p.set('p', sn.play);
+      return u.toString();
+    }
+    function snapFromUrl() {
+      const p = new URLSearchParams(location.search);
+      if (!p.get('r') || !p.get('l') || !p.get('s')) return null;
+      const sn = {
+        region: p.get('r'), line: p.get('l'),
+        station: { name: p.get('s'), origin: p.get('o') || '', n: Number(p.get('n')) },
+        food: p.get('f'), dessert: p.get('d'), play: p.get('p'),
+      };
+      return resolveSnap(sn) ? sn : null;
+    }
+
+    function renderCourse(c) {
+      const line = c.line;
+      const s = c.station;
       const where = stationQuery(s.name);
       const row = (k, ...v) => {
         const li = make('li');
@@ -1109,18 +1193,86 @@
         return li;
       };
       const rows = [
-        row('지역', region().name),
+        row('지역', c.region.name),
         row('호선', dot(line), line.name),
         row('역', mapLink(stationLabel(s.name), where), make('small', null, countOf(s))),
       ];
       for (const k of ['food', 'dessert', 'play']) {
-        const item = itemOf(k);
+        const item = c[k];
         rows.push(row(STEPS.find(x => x.key === k).short, mapLink(item.label, where + ' ' + item.q), make('small', null, item.cat)));
       }
       els.course.replaceChildren(...rows);
     }
 
+    /* ---------- 화면: 처음 / 뽑기 / 코스 보기 ---------- */
+
+    // view: 'home' 처음 화면, 'steps' 뽑기 단계, 'snap' 저장·공유된 코스 보기
+    let view = 'home';
+    let snap = null;        // 'snap' 화면에서 보여 줄 코스
+    let snapKind = '';      // 'shared' | 'recent'
+    const inProgress = () => !!state.line && state.step < DONE;
+
+    function renderHome() {
+      const sn = loadRecent();
+      els.recent.hidden = !sn;
+      if (!sn) return;
+      const c = resolveSnap(sn);
+      const d = sn.at ? new Date(sn.at) : null;
+      const lineEl = make('span', 'recent-line');
+      lineEl.append(dot(c.line), `${c.line.name} ${stationLabel(c.station.name)}`);
+      els.recentCard.replaceChildren(
+        lineEl,
+        make('span', 'recent-items', [sn.food, sn.dessert, sn.play].join(' · ')),
+        ...(d ? [make('span', 'recent-date', `${d.getMonth() + 1}월 ${d.getDate()}일`)] : []),
+      );
+    }
+    function openSnap(sn, kind) {
+      snap = sn;
+      snapKind = kind;
+      view = 'snap';
+      render();
+      window.scrollTo(0, 0);
+    }
+    function goHome() {
+      if (busy) return;
+      view = 'home';
+      snap = null;
+      if (location.search) history.replaceState(null, '', location.pathname); // 공유 링크 주소 정리
+      setMsg('');
+      els.toast.textContent = '';
+      render();
+      window.scrollTo(0, 0);
+    }
+    function clearPicks() {
+      state.line = null;
+      state.station = null;
+      state.food = null;
+      state.dessert = null;
+      state.play = null;
+      state.step = 0;
+      choosing = false;
+      save();
+    }
+    function startSteps(fresh) {
+      if (fresh) clearPicks();
+      view = 'steps';
+      if (location.search) history.replaceState(null, '', location.pathname);
+      setMsg('');
+      render();
+      window.scrollTo(0, 0);
+    }
+
     function syncActions() {
+      const homeView = view === 'home', snapView = view === 'snap';
+      els.start.hidden = !homeView;
+      els.start.textContent = inProgress() ? '이어서 뽑기' : '시작하기';
+      els.startNew.hidden = !(homeView && inProgress());
+      els.homeBtn.hidden = !snapView;
+      if (homeView || snapView) {
+        for (const b of [els.draw, els.next, els.back, els.restart]) b.hidden = true;
+        els.share.hidden = !snapView;
+        return;
+      }
       const i = state.step;
       const spinning = !!rolling;
       const has = isDrawStep(i) && !!state[STEPS[i].key];
@@ -1134,11 +1286,32 @@
       const showingResult = has && !chooser;
       els.back.hidden = i === 0 && !showingResult;
       els.back.setAttribute('aria-disabled', String(spinning));
-      els.copy.hidden = i !== DONE;
+      els.share.hidden = i !== DONE;
       els.restart.hidden = i !== DONE;
     }
 
     function render() {
+      const homeView = view === 'home', snapView = view === 'snap';
+      els.home.hidden = !homeView;
+      els.bar.hidden = homeView;
+      els.progressNav.hidden = snapView;
+      els.stepHead.hidden = homeView;
+      els.copyText.hidden = true;
+      if (homeView || snapView) {
+        for (const el of [els.filter, els.catFilter, els.sign, els.item]) el.hidden = true;
+        els.course.hidden = !snapView;
+        if (homeView) {
+          applyLineColor(null);
+          renderHome();
+        } else {
+          const c = resolveSnap(snap);
+          applyLineColor(c.line);
+          els.title.textContent = snapKind === 'shared' ? '공유받은 코스' : '최근 코스';
+          renderCourse(c);
+        }
+        syncActions();
+        return;
+      }
       const i = state.step;
       const key = STEPS[i].key;
       const drawStep = isDrawStep(i);
@@ -1160,7 +1333,7 @@
       if (isItemStep(key)) paintItem(key, itemOf(key), false);
       if (kind === 'line') renderFilter();
       if (kind === 'cat') renderCats();
-      if (key === 'done') renderCourse();
+      if (key === 'done') renderCourse(resolveSnap(snapFromState()));
       renderProgress();
       syncActions();
     }
@@ -1193,53 +1366,53 @@
       toastTimer = setTimeout(() => { els.toast.textContent = ''; }, 4000);
     };
 
-    els.copy.addEventListener('click', () => {
-      const s = state.station;
-      const text = [
-        `지역: ${region().name}`,
-        `호선: ${curLine().name}`,
-        `역: ${stationLabel(s.name)} (${countOf(s)})`,
-        `밥: ${state.food}`,
-        `디저트: ${state.dessert}`,
-        `놀거리: ${state.play}`,
-      ].join('\n');
+    // 공유하기: 휴대폰 공유 창(카카오톡 등)으로 링크를 보내고, 없으면 링크를 복사합니다.
+    els.share.addEventListener('click', async () => {
+      const sn = view === 'snap' ? snap : snapFromState();
+      const c = resolveSnap(sn);
+      if (!c) return;
+      const url = shareUrl(sn);
+      const text = `${c.line.name} ${stationLabel(c.station.name)} · ${sn.food} · ${sn.dessert} · ${sn.play}`;
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: '랜덤 데이트 코스', text, url });
+          return;
+        } catch (e) {
+          if (e && e.name === 'AbortError') return; // 공유 창을 닫은 경우
+        }
+      }
       const showForManualCopy = () => {
-        els.copyText.textContent = text;
+        els.copyText.textContent = url;
         els.copyText.hidden = false;
         const range = document.createRange();
         range.selectNodeContents(els.copyText);
         const sel = window.getSelection();
         sel.removeAllRanges();
         sel.addRange(range);
-        toast('자동 복사가 막혀 있어 목록을 선택해 두었습니다. 직접 복사해 주세요.');
+        toast('링크를 선택해 두었습니다. 복사해서 보내 주세요.');
       };
       try {
-        navigator.clipboard.writeText(text).then(() => toast('목록을 복사했습니다.'), showForManualCopy);
+        navigator.clipboard.writeText(url).then(() => toast('공유 링크를 복사했습니다.'), showForManualCopy);
       } catch (e) { showForManualCopy(); }
     });
 
-    let restartArmed = false;
-    let restartTimer;
-    function disarmRestart() {
-      restartArmed = false;
-      clearTimeout(restartTimer);
-      els.restart.textContent = '처음부터 다시';
-    }
+    // 처음부터 다시: 확인 없이 뽑은 것을 지우고 처음 화면으로
     els.restart.addEventListener('click', () => {
-      if (!restartArmed) {
-        restartArmed = true;
-        els.restart.textContent = '한 번 더 누르면 지웁니다';
-        restartTimer = setTimeout(disarmRestart, 4000);
-        return;
-      }
-      state.line = null;
-      state.station = null;
-      state.food = null;
-      state.dessert = null;
-      state.play = null;
-      go(0);
+      if (busy) return;
+      clearPicks();
+      goHome();
     });
+    els.homeBtn.addEventListener('click', goHome);
+    els.start.addEventListener('click', () => startSteps(!inProgress()));
+    els.startNew.addEventListener('click', () => startSteps(true));
+    els.recentCard.addEventListener('click', () => { const sn = loadRecent(); if (sn) openSnap(sn, 'recent'); });
+    $('brand').addEventListener('click', goHome);
 
+    // 공유 링크로 들어오면 그 코스를, 아니면 처음 화면을 보여 줍니다.
+    {
+      const shared = snapFromUrl();
+      if (shared) { snap = shared; snapKind = 'shared'; view = 'snap'; }
+    }
     render();
   }
 
