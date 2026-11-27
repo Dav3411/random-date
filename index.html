@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>랜덤 역 데이트</title>
-<meta name="description" content="지역을 고르고 지하철 호선, 종점에서 몇 번째 역, 밥, 디저트, 놀거리를 한 화면에 하나씩 뽑아 데이트 코스를 정합니다.">
+<meta name="description" content="‘아무거나’라고 했지? 그럼 진짜 아무 역에 내려서 아무거나 먹고 아무거나 한다. 지하철 호선부터 역, 밥, 디저트, 놀거리까지 전부 뽑기로 정하는 데이트. 무르기 없음.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='23' fill='%23fff' stroke='%2300A84D' stroke-width='12'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -104,10 +104,10 @@
     padding-block: 24px; text-align: center;
   }
   .home-head { position: relative; display: grid; justify-items: center; gap: 22px; }
-  /* 글자 뒤로는 배경 선이 부드럽게 옅어지도록 바탕색을 둥글게 깔아 둡니다. */
+  /* 글자 뒤로 지나가는 배경 선은 가려지도록 바탕색 판을 깔고, 가장자리는 흐리게 풀어 둡니다. */
   .home-head::before {
-    content: ""; position: absolute; inset: -44px -16px; z-index: -1; pointer-events: none;
-    background: radial-gradient(closest-side, var(--bg) 64%, transparent);
+    content: ""; position: absolute; inset: -16px -6px -14px; z-index: -1; pointer-events: none;
+    background: var(--bg); border-radius: 36px; filter: blur(12px);
   }
   /* 좁은 휴대폰에서도 제목이 한 줄에 들어가는 크기 */
   .home-title { margin: 0; font: 400 clamp(3.2rem, 16.5vw, 6rem)/.95 var(--font-display); white-space: nowrap; }
@@ -126,13 +126,10 @@
   .home-card-label { font: 600 .78rem/1.2 var(--font-body); letter-spacing: .04em; color: var(--muted); }
   .home-card .recent-line { font-size: 1.35rem; }
 
-  /* 처음 화면 배경: 노선도처럼 꺾이는 색 선이 천천히 그려졌다 지워집니다. 양 끝은 도넛 */
-  .home-bg { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; opacity: .5; }
-  .home-bg path { fill: none; stroke: var(--c); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
-  .home-bg circle { fill: var(--bg); stroke: var(--c); stroke-width: 4; }
+  /* 처음 화면 배경: 노선도 조각이 깔린 판이 통째로 천천히 흘러갑니다. (그림과 크기는 스크립트가 정합니다) */
+  .home-bg { position: fixed; left: 0; top: 0; z-index: 0; pointer-events: none; opacity: .5; }
   @media (prefers-color-scheme: dark) {
     .home-bg { opacity: .62; }
-    .home-bg path, .home-bg circle { stroke: color-mix(in srgb, var(--c) 76%, #FFFFFF); }
   }
   .recent-line { display: flex; align-items: center; gap: 8px; font: 400 1.5rem/1.2 var(--font-display); }
   .recent-items { font-size: .95rem; word-break: keep-all; }
@@ -360,7 +357,7 @@
 </style>
 </head>
 <body>
-<svg class="home-bg" id="home-bg" aria-hidden="true" hidden></svg>
+<canvas class="home-bg" id="home-bg" aria-hidden="true" hidden></canvas>
 <div class="wrap">
   <header class="bar" id="bar">
     <div class="bar-top">
@@ -377,11 +374,11 @@
       <div class="home-head">
         <h1 class="home-title">랜덤 역 데이트</h1>
         <div class="home-copy">
-          <p class="home-q">어디서 뭐 할지, 또 고민 중인가요?</p>
-          <p class="home-a">‘아무거나’는 이제 그만. 내릴 역부터 밥, 디저트, 놀거리까지 전부 뽑기에 맡겨 보세요.</p>
+          <p class="home-q">‘아무거나’라고 했지?</p>
+          <p class="home-a">그럼 진짜 아무 역에 내려서 아무거나 먹고 아무거나 한다. 무르기 없음.</p>
         </div>
       </div>
-      <button id="start" class="btn btn-primary home-start" type="button">시작하기</button>
+      <button id="start" class="btn btn-primary home-start" type="button">가보자고</button>
       <div class="home-cards">
         <button class="home-card" id="resume-card" type="button" hidden></button>
         <button class="home-card" id="recent-card" type="button" hidden></button>
@@ -1176,12 +1173,12 @@
 
     /* ---------- 코스: 저장·공유 ---------- */
 
-    // 코스 한 벌: { region, line, station: { name, origin, n }, food, dessert, play, at }
+    // 코스 한 벌: { region, line, station: { name, origin, n }, food, dessert, play } (날짜는 저장하지 않습니다)
     const LAST_KEY = 'random-date-last';
     const snapFromState = () => ({
       region: state.region, line: state.line,
       station: state.station && { name: state.station.name, origin: state.station.origin, n: state.station.n },
-      food: state.food, dessert: state.dessert, play: state.play, at: Date.now(),
+      food: state.food, dessert: state.dessert, play: state.play,
     });
     // 코스를 지금 데이터로 풀어 봅니다. 맞지 않는 값이 있으면 null.
     function resolveSnap(sn) {
@@ -1262,10 +1259,11 @@
         el.append(dot(line), station ? `${line.name} ${stationLabel(station.name)}` : line.name);
         return el;
       };
-      // 카드 윗줄: 왼쪽에 카드 이름, 오른쪽에 덧붙이는 말(다음 단계 · 날짜)
+      // 카드 윗줄: 왼쪽에 카드 이름, 오른쪽에 덧붙이는 말(다음 단계)
       const cardTop = (label, meta) => {
         const el = make('span', 'home-card-top');
-        el.append(make('span', 'home-card-label', label), make('span', 'recent-date', meta));
+        el.append(make('span', 'home-card-label', label));
+        if (meta) el.append(make('span', 'recent-date', meta));
         return el;
       };
       // 이어서 뽑기: 뽑다 만 것이 있을 때만 시작 버튼 아래에 카드로
@@ -1285,9 +1283,8 @@
       els.recentCard.hidden = !sn;
       if (sn) {
         const c = resolveSnap(sn);
-        const d = sn.at ? new Date(sn.at) : null;
         els.recentCard.replaceChildren(
-          cardTop('최근 코스', d ? `${d.getMonth() + 1}월 ${d.getDate()}일` : ''),
+          cardTop('최근 코스'),
           lineRow(c.line, c.station),
           make('span', 'recent-items', [sn.food, sn.dessert, sn.play].join(' · ')),
         );
@@ -1296,121 +1293,216 @@
 
     /* ---------- 처음 화면 배경 ---------- */
 
-    // 노선도처럼 가로·세로·45도로만 꺾이는 색 선. 한쪽 끝에서 천천히 뻗어 나가 잠시 머물렀다가,
-    // 출발한 쪽부터 따라가며 사라집니다. 양 끝은 종점 표시처럼 도넛 모양입니다.
+    // 노선도 조각이 얼기설기 깔린 큰 판 하나가 통째로 한 방향으로 천천히 흘러갑니다.
+    // 선은 가로·세로·45도로만 꺾이고, 양 끝은 종점 표시처럼 도넛 모양입니다.
+    // 판은 화면보다 큰 정사각형이고 위아래·좌우가 서로 이어져 있어서 끊김 없이 계속 흐릅니다.
     const homeBg = (() => {
-      const svg = $('home-bg');
-      // from: 출발점(화면 너비·높이 비율). path: [방향, 길이]. 길이는 가로는 너비, 세로는 높이,
-      // 대각선은 둘 중 짧은 쪽에 대한 비율이라 어떤 화면 비율에서도 45도가 유지됩니다.
-      // at: 한 바퀴 중 어디쯤에서 시작할지. 고르게 어긋나 있어서 한 번에 한두 개만 움직이고,
-      //     위쪽·아래쪽 선이 같이 비지 않습니다.
-      const ROUTES = [
-        // 가운데 글자 자리는 비워 두고 위·아래와 양옆 가장자리로만 지나갑니다.
-        { c: '#00A84D', from: [.08, .07], path: [['E', .50], ['SE', .20], ['S', .06]], at: .37 },
-        { c: '#0052A4', from: [.10, .21], path: [['E', .20], ['NE', .10], ['E', .18]], at: .87 },
-        { c: '#EF7C1C', from: [.94, .16], path: [['S', .46], ['SW', .10]], at: .53 },
-        { c: '#00A5DE', from: [.06, .37], path: [['S', .35], ['SE', .16], ['E', .36]], at: .20 },
-        { c: '#996CAC', from: [.10, .92], path: [['E', .22], ['NE', .10], ['E', .26]], at: .70 },
-        { c: '#E6186C', from: [.40, .965], path: [['E', .28], ['NE', .16]], at: .03 },
-      ];
-      const DIR = { E: [1, 0], W: [-1, 0], S: [0, 1], N: [0, -1], SE: [1, 1], SW: [-1, 1], NE: [1, -1], NW: [-1, -1] };
-      // CYCLE: 선 하나가 뻗고, 머물고, 사라지기까지 한 바퀴(초). 모든 선이 같아서 어긋난 간격이 유지되고,
-      // 대부분의 시간은 다 그려진 채 머물러 노선도처럼 보입니다. REST: 사라진 뒤 쉬는 시간
-      const CYCLE = 48, REST = 2, FADE = .7, BEND = 18, RING = 6.5;
-      const ease = p => p * p * (3 - 2 * p);
-      const clamp01 = v => Math.max(0, Math.min(1, v));
-      const svgEl = (tag, attrs) => {
-        const n = document.createElementNS(SVGNS, tag);
-        for (const [k, v] of Object.entries(attrs || {})) n.setAttribute(k, v);
-        return n;
-      };
-      let lines = [], raf = 0, t0 = 0, builtW = 0, builtH = 0;
+      const cv = $('home-bg');
+      const ctx = cv.getContext('2d');
+      const COLORS = ['#00A84D', '#EF7C1C', '#00A5DE', '#996CAC', '#E6186C', '#0052A4', '#F5A200', '#77C4A3'];
+      const DIRS = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]]
+        .map(([x, y]) => (x && y ? [x * Math.SQRT1_2, y * Math.SQRT1_2] : [x, y]));
+      const SEED = 7;             // 판 모양을 정하는 씨앗. 같은 화면 크기에서는 늘 같은 판이 나옵니다.
+      const PITCH = 230;          // 선 하나가 차지하는 자리(px). 작을수록 촘촘합니다.
+      const VX = -24, VY = -14;   // 판이 흐르는 방향과 빠르기(초당 px): 왼쪽 위로
+      const LINE = 5, RING = 6.5, BEND = 18;
+      const CELL = 40;            // 가까운 선을 찾을 때 쓰는 칸 크기
+      const RING_GAP = 30;        // 끝 도넛과 다른 선 사이 최소 거리
+      const END_GAP = 64;         // 끝 도넛끼리 최소 거리
+      const CROSS_BAND = 20, CROSS_MAX = 7; // 한 번 가로지르는 것만 허용 (나란히 붙어 가거나 두 번 만나면 탈락)
+      let routes = [], palette = COLORS, bg = '#fff';
+      let T = 0, W = 0, H = 0, CH = 0, dpr = 1, speed = 1, raf = 0, t0 = 0;
 
-      function build() {
-        const W = window.innerWidth, H = window.innerHeight, m = Math.min(W, H);
-        builtW = W; builtH = H;
-        const speed = Math.max(55, m * .15); // 초당 px. 큰 화면에서는 조금 빠르게
-        // viewBox 없이 화면 px 그대로 그립니다. 주소창이 접혀 높이가 조금 바뀌어도 그림이 늘어나지 않습니다.
-        svg.replaceChildren();
-        lines = ROUTES.map(r => {
-          let x = r.from[0] * W, y = r.from[1] * H;
-          const pts = [[x, y]];
-          for (const [dir, len] of r.path) {
-            const [dx, dy] = DIR[dir];
-            const px = len * (dx && dy ? m : dx ? W : H);
-            x += dx * px; y += dy * px;
-            pts.push([x, y]);
+      // 씨앗이 정해진 난수 (mulberry32)
+      const rng = seed => () => {
+        seed = (seed + 0x6D2B79F5) | 0;
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+      const toward = (a, b, r) => {
+        const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        const k = Math.min(r, d / 2) / d;
+        return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
+      };
+      const wrap = v => ((v % T) + T) % T;
+
+      // 판 만들기: 자리마다 선을 하나씩 놓되, 다른 선과 어색하게 붙지 않는 모양이 나올 때까지 다시 뽑습니다.
+      function generate() {
+        const rand = rng(SEED);
+        const cols = T / CELL;
+        const grid = new Map(); // 칸 번호 → 그 칸의 점들 [x, y, 선 번호, 끝점인지]
+        const key = (cx, cy) => (((cx % cols) + cols) % cols) + (((cy % cols) + cols) % cols) * cols;
+        // (x, y)에서 r 안에 있는 다른 선의 점마다 fn(점, 거리). 판의 가장자리는 반대편과 이어진 것으로 봅니다.
+        const near = (x, y, r, fn) => {
+          x = wrap(x); y = wrap(y);
+          const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL), span = Math.ceil(r / CELL);
+          for (let i = -span; i <= span; i++) for (let j = -span; j <= span; j++) {
+            for (const p of grid.get(key(cx + i, cy + j)) || []) {
+              let dx = Math.abs(x - p[0]), dy = Math.abs(y - p[1]);
+              if (dx > T / 2) dx = T - dx;
+              if (dy > T / 2) dy = T - dy;
+              const d = Math.hypot(dx, dy);
+              if (d < r) fn(p, d);
+            }
           }
-          // 꺾이는 곳은 둥글게
-          const toward = (a, b) => {
-            const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
-            const k = Math.min(BEND, d / 2) / d;
-            return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
-          };
-          const f = p => p.map(v => v.toFixed(1)).join(' ');
-          let d = 'M' + f(pts[0]);
-          for (let i = 1; i < pts.length - 1; i++) {
-            d += ` L${f(toward(pts[i], pts[i - 1]))} Q${f(pts[i])} ${f(toward(pts[i], pts[i + 1]))}`;
+        };
+        const n = Math.max(3, Math.round(T / PITCH)), slot = T / n;
+        const slots = [];
+        for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) slots.push([i, j]);
+        for (let i = slots.length - 1; i > 0; i--) {
+          const j = Math.floor(rand() * (i + 1));
+          [slots[i], slots[j]] = [slots[j], slots[i]];
+        }
+        const out = [];
+        for (const [si, sj] of slots) {
+          for (let tries = 0; tries < 40; tries++) {
+            // 모양: 2~4토막. 꺾일 때마다 45도, 처음 방향에서 90도 넘게 돌지 않습니다.
+            const segs = 2 + Math.floor(rand() * 3);
+            let dir = Math.floor(rand() * 8), turned = 0, x = 0, y = 0;
+            const pts = [[0, 0]];
+            for (let s = 0; s < segs; s++) {
+              if (s) {
+                let turn = rand() < .5 ? -1 : 1;
+                if (Math.abs(turned + turn) > 2) turn = -turn;
+                turned += turn;
+                dir = (dir + turn + 8) % 8;
+              }
+              const len = 90 + rand() * 170;
+              x += DIRS[dir][0] * len; y += DIRS[dir][1] * len;
+              pts.push([x, y]);
+            }
+            // 선의 한가운데가 제 자리 안 어딘가에 오도록 옮깁니다.
+            const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+            const tx = (si + .15 + rand() * .7) * slot - (Math.min(...xs) + Math.max(...xs)) / 2;
+            const ty = (sj + .15 + rand() * .7) * slot - (Math.min(...ys) + Math.max(...ys)) / 2;
+            for (const p of pts) { p[0] += tx; p[1] += ty; }
+            // 선 위에 10px쯤마다 점을 찍어 다른 선과의 거리를 봅니다.
+            const dots = [];
+            for (let s = 1; s < pts.length; s++) {
+              const a = pts[s - 1], b = pts[s];
+              const steps = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 10);
+              for (let k = 0; k < steps; k++) dots.push([a[0] + (b[0] - a[0]) * k / steps, a[1] + (b[1] - a[1]) * k / steps]);
+            }
+            dots.push(pts[pts.length - 1]);
+            let ok = true;
+            const hits = new Map(); // 가로지르는 선 번호 → 겹친 점 수
+            for (let i = 0; i < dots.length && ok; i++) {
+              const end = i === 0 || i === dots.length - 1;
+              const touched = new Set();
+              near(dots[i][0], dots[i][1], end ? END_GAP : RING_GAP, (p, d) => {
+                if (end) { if (p[3] || d < RING_GAP) ok = false; }  // 내 끝 도넛은 다른 도넛·선과 떨어져 있게
+                else if (p[3]) ok = false;                            // 남의 끝 도넛 바로 옆으로 지나가지 않게
+                else if (d < CROSS_BAND) touched.add(p[2]);
+              });
+              for (const r of touched) hits.set(r, (hits.get(r) || 0) + 1);
+            }
+            if (!ok || hits.size > 3 || [...hits.values()].some(c => c > CROSS_MAX)) continue;
+            // 색: 가로지르거나 가까이 있는 선과 겹치지 않게
+            const taken = new Set([...hits.keys()].map(r => out[r].ci));
+            for (let i = 0; i < dots.length; i += 4) near(dots[i][0], dots[i][1], 90, p => taken.add(out[p[2]].ci));
+            let ci = out.length % COLORS.length;
+            for (let k = 0; k < COLORS.length && taken.has(ci); k++) ci = (ci + 1) % COLORS.length;
+            dots.forEach((p, i) => {
+              const k = key(Math.floor(wrap(p[0]) / CELL), Math.floor(wrap(p[1]) / CELL));
+              if (!grid.has(k)) grid.set(k, []);
+              grid.get(k).push([wrap(p[0]), wrap(p[1]), out.length, i === 0 || i === dots.length - 1]);
+            });
+            // 꺾이는 곳은 둥글게
+            const path = new Path2D();
+            path.moveTo(pts[0][0], pts[0][1]);
+            for (let s = 1; s < pts.length - 1; s++) {
+              const a = toward(pts[s], pts[s - 1], BEND), b = toward(pts[s], pts[s + 1], BEND);
+              path.lineTo(a[0], a[1]);
+              path.quadraticCurveTo(pts[s][0], pts[s][1], b[0], b[1]);
+            }
+            const last = pts[pts.length - 1];
+            path.lineTo(last[0], last[1]);
+            out.push({
+              path, ci, ends: [pts[0], last],
+              x0: Math.min(...xs) + tx - 12, x1: Math.max(...xs) + tx + 12,
+              y0: Math.min(...ys) + ty - 12, y1: Math.max(...ys) + ty + 12,
+            });
+            break;
           }
-          d += ' L' + f(pts[pts.length - 1]);
-          const g = svgEl('g');
-          g.style.setProperty('--c', r.c);
-          const path = svgEl('path', { d });
-          const tail = svgEl('circle', { r: RING });
-          const head = svgEl('circle', { r: RING });
-          g.append(path, tail, head);
-          svg.append(g);
-          const len = path.getTotalLength();
-          const run = len / speed;
-          const hold = Math.max(6, CYCLE - REST - run * 2);
-          return { g, path, tail, head, len, run, hold, cycle: run * 2 + hold + REST, at: r.at };
+        }
+        return out;
+      }
+
+      // 밝은/어두운 화면에 맞춘 색. 어두운 화면에서는 선을 조금 밝게 합니다.
+      function tint() {
+        bg = getComputedStyle(root).getPropertyValue('--bg').trim() || '#EDF0EF';
+        palette = COLORS.map(c => {
+          if (!darkQuery.matches) return c;
+          const v = parseInt(c.slice(1), 16);
+          const mix = ch => Math.round(ch * .76 + 255 * .24);
+          return `rgb(${mix(v >> 16)}, ${mix((v >> 8) & 255)}, ${mix(v & 255)})`;
         });
       }
 
-      function place(ln, a, b, opacity) {
-        // 머무는 동안에는 값이 그대로라 아무것도 다시 그리지 않습니다.
-        const key = `${a.toFixed(1)} ${b.toFixed(1)} ${opacity.toFixed(2)}`;
-        if (ln.key === key) return;
-        ln.key = key;
-        ln.path.setAttribute('stroke-dasharray', `${Math.max(0, b - a).toFixed(1)} ${(ln.len + 20).toFixed(1)}`);
-        ln.path.setAttribute('stroke-dashoffset', (-a).toFixed(1));
-        const pa = ln.path.getPointAtLength(a), pb = ln.path.getPointAtLength(b);
-        ln.tail.setAttribute('cx', pa.x.toFixed(1)); ln.tail.setAttribute('cy', pa.y.toFixed(1));
-        ln.head.setAttribute('cx', pb.x.toFixed(1)); ln.head.setAttribute('cy', pb.y.toFixed(1));
-        ln.g.setAttribute('opacity', opacity.toFixed(2));
+      function build() {
+        W = window.innerWidth; H = window.innerHeight;
+        CH = H + 140; // 휴대폰 주소창이 접혀 화면이 길어져도 아래가 비지 않게 넉넉히
+        dpr = Math.min(window.devicePixelRatio || 1, 3);
+        cv.width = Math.round(W * dpr); cv.height = Math.round(CH * dpr);
+        cv.style.width = W + 'px'; cv.style.height = CH + 'px';
+        speed = Math.min(1.6, Math.max(1, Math.min(W, H) / 420)); // 큰 화면에서는 조금 빠르게
+        // 판은 화면보다 크게: 같은 선이 한 화면에 두 번 보이지 않습니다.
+        const size = Math.ceil(Math.max(W, CH) * 1.15 / CELL) * CELL;
+        if (size !== T) { T = size; routes = generate(); }
+        tint();
+      }
+
+      // 판을 (ox, oy)만큼 민 모습을 그립니다. 판을 사방으로 이어 붙여 화면에 걸친 선만 그립니다.
+      function draw(ox, oy) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        const seen = [];
+        for (const r of routes) for (let i = -2; i <= 1; i++) for (let j = -2; j <= 1; j++) {
+          const dx = ox + i * T, dy = oy + j * T;
+          if (r.x1 + dx > 0 && r.x0 + dx < W && r.y1 + dy > 0 && r.y0 + dy < CH) seen.push([r, dx, dy]);
+        }
+        ctx.lineWidth = LINE;
+        for (const [r, dx, dy] of seen) {
+          ctx.setTransform(dpr, 0, 0, dpr, dx * dpr, dy * dpr);
+          ctx.strokeStyle = palette[r.ci];
+          ctx.stroke(r.path);
+        }
+        // 도넛은 선 위에 얹습니다.
+        ctx.lineWidth = 4; ctx.fillStyle = bg;
+        for (const [r, dx, dy] of seen) {
+          ctx.setTransform(dpr, 0, 0, dpr, dx * dpr, dy * dpr);
+          ctx.strokeStyle = palette[r.ci];
+          for (const e of r.ends) {
+            ctx.beginPath();
+            ctx.arc(e[0], e[1], RING, 0, Math.PI * 2);
+            ctx.fill(); ctx.stroke();
+          }
+        }
       }
 
       function frame(now) {
         const sec = (now - t0) / 1000;
-        for (const ln of lines) {
-          const t = (sec + ln.at * ln.cycle) % ln.cycle;
-          const gone = ln.run * 2 + ln.hold;
-          if (t >= gone) { place(ln, ln.len, ln.len, 0); continue; }
-          const a = t > ln.run + ln.hold ? ease((t - ln.run - ln.hold) / ln.run) * ln.len : 0;
-          const b = t < ln.run ? ease(t / ln.run) * ln.len : ln.len;
-          place(ln, a, b, clamp01(Math.min(t, gone - t) / FADE));
-        }
+        draw(wrap(VX * speed * sec), wrap(VY * speed * sec));
         raf = requestAnimationFrame(frame);
       }
 
       function show() {
-        svg.removeAttribute('hidden'); // 길이를 재려면 화면에 그려져 있어야 합니다
-        const W = window.innerWidth, H = window.innerHeight;
-        // 휴대폰 주소창이 접히며 높이만 조금 바뀔 때는 다시 그리지 않습니다.
-        if (!lines.length || W !== builtW || Math.abs(H - builtH) > 120) build();
+        cv.hidden = false;
+        // 휴대폰 주소창이 접히며 높이만 조금 바뀔 때는 다시 만들지 않습니다.
+        if (!routes.length || window.innerWidth !== W || Math.abs(window.innerHeight - H) > 120) build();
         cancelAnimationFrame(raf);
-        if (reduceMotion.matches) {
-          for (const ln of lines) place(ln, 0, ln.len, 1); // 움직임 줄이기: 다 그려진 채로 가만히
-          return;
-        }
+        if (reduceMotion.matches) { draw(0, 0); return; } // 움직임 줄이기: 멈춘 그림으로
         if (!t0) t0 = performance.now();
         raf = requestAnimationFrame(frame);
       }
       function hide() {
         cancelAnimationFrame(raf);
-        svg.setAttribute('hidden', '');
+        cv.hidden = true;
       }
-      window.addEventListener('resize', () => { if (!svg.hasAttribute('hidden')) show(); });
+      window.addEventListener('resize', () => { if (!cv.hidden) show(); });
+      darkQuery.addEventListener('change', () => { tint(); if (!cv.hidden && reduceMotion.matches) draw(0, 0); });
       return { show, hide };
     })();
     function openSnap(sn, kind) {
@@ -1559,7 +1651,7 @@
       const c = resolveSnap(sn);
       if (!c) return;
       const url = shareUrl(sn);
-      const text = `${c.line.name} ${stationLabel(c.station.name)} · ${sn.food} · ${sn.dessert} · ${sn.play}`;
+      const text = `오늘 데이트 뽑힘: ${c.line.name} ${stationLabel(c.station.name)} · ${sn.food} · ${sn.dessert} · ${sn.play}. 무르기 없음.`;
       if (navigator.share) {
         try {
           await navigator.share({ title: '랜덤 역 데이트 코스', text, url });
