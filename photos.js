@@ -319,6 +319,102 @@ const PHOTOS = {
    "author": "Alpha from Melbourne, Australia",
    "license": "CC BY-SA 2.0",
    "page": "https://commons.wikimedia.org/wiki/File:Grilled_eel.jpg"
+  },
+  "소고기 구이": {
+   "src": "img/food/54.jpg",
+   "author": "Oleg Yunakov",
+   "license": "CC BY-SA 4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Marbled_beef_cooking_on_a_Korean_barbecue_tabletop_grill.jpg"
+  },
+  "갈비": {
+   "src": "img/food/55.jpg",
+   "author": "김태경",
+   "license": "CC0",
+   "page": "https://commons.wikimedia.org/wiki/File:Galbi-gui_2.jpg"
+  },
+  "양갈비": {
+   "src": "img/food/56.jpg",
+   "author": "Fumikas Sagisavas",
+   "license": "CC0",
+   "page": "https://commons.wikimedia.org/wiki/File:Freshippo_grilled_lamb_chops.jpg"
+  },
+  "오리고기": {
+   "src": "img/food/57.jpg",
+   "author": "Peachyeung316",
+   "license": "CC BY-SA 4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Sliced_Peking_Roasted_Duck_from_Peking_Garden.jpg"
+  },
+  "삼계탕": {
+   "src": "img/food/58.jpg",
+   "author": "wizdata",
+   "license": "CC0",
+   "page": "https://commons.wikimedia.org/wiki/File:Samgye-tang_2.jpg"
+  },
+  "설렁탕·곰탕": {
+   "src": "img/food/59.jpg",
+   "author": "이동원",
+   "license": "CC0",
+   "page": "https://commons.wikimedia.org/wiki/File:Seolleongtang.jpg"
+  },
+  "막국수": {
+   "src": "img/food/60.jpg",
+   "author": "pcamp (a flickr user)",
+   "license": "CC BY 2.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Korean.food-Makguksu-01.jpg"
+  },
+  "한정식": {
+   "src": "img/food/61.jpg",
+   "author": "by Richy! at flickr",
+   "license": "CC BY-SA 2.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Korean_cuisine-Hanjeongsik-05.jpg"
+  },
+  "전·막걸리": {
+   "src": "img/food/62.jpg",
+   "author": "Korea.net / Korean Culture and Information Service (Jeon Han",
+   "license": "CC BY-SA 2.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Buchimgae_and_makgeolli.jpg"
+  },
+  "대게·킹크랩": {
+   "src": "img/food/63.jpg",
+   "author": "さかおり",
+   "license": "CC BY-SA 4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Boiled_Echizen_crab_(snow_crab)_male_and_female.jpg"
+  },
+  "덮밥": {
+   "src": "img/food/64.jpg",
+   "author": "pxfuel",
+   "license": "CC BY-SA 4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Kaisendon_001.jpg"
+  },
+  "함박스테이크": {
+   "src": "img/food/65.jpg",
+   "author": "MaedaAkihiko",
+   "license": "CC BY-SA 4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Hamburg-Steak.jpg"
+  },
+  "만두": {
+   "src": "img/food/66.jpg",
+   "author": "Chloe Lim",
+   "license": "CC BY 2.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Jjin-mandu_3.jpg"
+  },
+  "뷔페": {
+   "src": "img/food/67.jpg",
+   "author": "Narek75",
+   "license": "CC BY-SA 4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:ATC_Buffet_Table_1.jpg"
+  },
+  "무한리필 고기": {
+   "src": "img/food/68.jpg",
+   "author": "이동원",
+   "license": "CC0",
+   "page": "https://commons.wikimedia.org/wiki/File:Samgyeopsal_table.jpg"
+  },
+  "샐러드바 뷔페": {
+   "src": "img/food/69.jpg",
+   "author": "HNBS",
+   "license": "CC0",
+   "page": "https://commons.wikimedia.org/wiki/File:Salad-bar-2094459_1920.jpg"
   }
  },
  "dessert": {
@@ -537,6 +633,24 @@ const PHOTOS = {
    "author": "Gaurav Dhwaj Khadka",
    "license": "CC BY-SA 4.0",
    "page": "https://commons.wikimedia.org/wiki/File:Milk_Tea_5.jpg"
+  },
+  "베이글": {
+   "src": "img/dessert/37.jpg",
+   "author": "Shisma",
+   "license": "CC BY 4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Bagel_with_sesame_3.jpg"
+  },
+  "크루아상": {
+   "src": "img/dessert/38.jpg",
+   "author": "Herry Wibisono (herryway)",
+   "license": "CC0",
+   "page": "https://commons.wikimedia.org/wiki/File:Croissants_au_beurre_(18953292873).jpg"
+  },
+  "호두과자": {
+   "src": "img/dessert/39.jpg",
+   "author": "parkyang1021",
+   "license": "CC BY 2.0 kr",
+   "page": "https://commons.wikimedia.org/wiki/File:Hodugwaja.jpg"
   }
  },
  "play": {
@@ -779,6 +893,90 @@ const PHOTOS = {
    "author": "Petar Milošević",
    "license": "CC BY-SA 4.0",
    "page": "https://commons.wikimedia.org/wiki/File:Cat_Cafe_(Cat_Caffe).jpg"
+  },
+  "스크린골프": {
+   "src": "img/play/41.jpg",
+   "author": "Ohconfucius",
+   "license": "CC BY-SA 3.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Indoor_golf_simulator.JPG"
+  },
+  "다트": {
+   "src": "img/play/42.jpg",
+   "author": "Christian Gidlöf",
+   "license": "Public domain",
+   "page": "https://commons.wikimedia.org/wiki/File:Three_darts_in_a_row.JPG"
+  },
+  "사격": {
+   "src": "img/play/43.jpg",
+   "author": "Sauer202",
+   "license": "CC BY-SA 4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Stripe_paper_target_for_smallbore_competitions_in_Nordic_Field_Shooting.jpg"
+  },
+  "실내 낚시": {
+   "src": "img/play/44.jpg",
+   "author": "池洋洋",
+   "license": "CC BY-SA 4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:279760950_m.jpg"
+  },
+  "재즈바": {
+   "src": "img/play/45.jpg",
+   "author": "digboston",
+   "license": "CC BY 2.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Bar_Kokhba_2014.jpg"
+  },
+  "북카페": {
+   "src": "img/play/46.jpg",
+   "author": "Missvain",
+   "license": "CC BY 4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Coffeehouse_Five_-_November_2023_-_Sarah_Stierch_01.jpg"
+  },
+  "가죽공방": {
+   "src": "img/play/47.jpg",
+   "author": "AmiraAdel93",
+   "license": "CC BY-SA 4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Inside_a_Leather_Workshop.jpg"
+  },
+  "캔들 만들기": {
+   "src": "img/play/48.jpg",
+   "author": "Priscilla Du Preez artographybyp",
+   "license": "CC0",
+   "page": "https://commons.wikimedia.org/wiki/File:Mahogany_teakwood_scented_candle_(cropped).jpg"
+  },
+  "꽃다발 만들기": {
+   "src": "img/play/49.jpg",
+   "author": "Suyash Dwivedi",
+   "license": "CC BY-SA 4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Rose_and_carnation_flower_bouquet_01.jpg"
+  },
+  "와인바": {
+   "src": "img/play/50.jpg",
+   "author": "aimee castenell",
+   "license": "CC BY-SA 2.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Wine_Institute_of_New_Orleans_-_Snackies.jpg"
+  },
+  "칵테일바": {
+   "src": "img/play/51.jpg",
+   "author": "Jonathan Hutchins",
+   "license": "CC BY-SA 2.0",
+   "page": "https://commons.wikimedia.org/wiki/File:The_1812_cocktail_bar_-_geograph.org.uk_-_5518559.jpg"
+  },
+  "수제맥주": {
+   "src": "img/play/52.jpg",
+   "author": "Armineaghayan",
+   "license": "CC BY-SA 4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Dargett_Craft_Beer_(1).jpg"
+  },
+  "포장마차": {
+   "src": "img/play/53.jpg",
+   "author": "LinasD",
+   "license": "CC BY-SA 4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Seoul_street_food_2011_march_20.jpg"
+  },
+  "강아지카페": {
+   "src": "img/play/54.jpg",
+   "author": "CafeUploader",
+   "license": "CC BY-SA 4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:DogCafe.jpg"
   }
  }
 };

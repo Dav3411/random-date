@@ -328,37 +328,17 @@
     background: color-mix(in srgb, var(--surface) 80%, transparent);
   }
   .map-credit a { color: inherit; }
-  /* 밥·디저트·놀거리 종류: 알약(종류 이름 + ⌄)들이 줄줄이 붙어 흐릅니다. 이름을 누르면 고르기/빼기,
-     ⌄를 누르면 그 종류의 항목이 바로 아래 한 줄을 다 써서 펼쳐집니다. 처음에는 다 접혀 있습니다. */
+  /* 밥·디저트·놀거리 종류: 알약들이 줄줄이 붙어 흐릅니다. 누르면 고르기/빼기. 세부 항목은 보여 주지 않습니다. */
   .cats { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
   .cat-row { display: contents; }
-  .cat-pill {
-    display: inline-flex; align-items: stretch; border-radius: 999px;
+  .cat {
+    padding: 7px 13px; border-radius: 999px;
     border: 1.5px solid var(--ink); background: var(--ink); color: var(--bg);
-    font: 600 .88rem/1.2 var(--font-body); white-space: nowrap;
+    font: 600 .88rem/1.2 var(--font-body); white-space: nowrap; cursor: pointer;
   }
-  .cat-row.is-off .cat-pill { background: transparent; border-color: var(--rule); color: var(--muted); }
-  .cat-pill button { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
-  .cat { padding: 7px 6px 7px 13px; }
-  /* 펼치기 버튼: 알약 오른쪽 끝, 이름과는 옅은 선으로 나눕니다. */
-  .cat-more {
-    display: grid; place-items: center; width: 32px; padding: 0 3px 0 0;
-    border-left: 1px solid color-mix(in srgb, currentColor 28%, transparent) !important;
-    margin: 6px 0;
-  }
-  .cat-more::after {
-    content: ""; width: 6px; height: 6px; margin-top: -3px;
-    border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
-    transform: rotate(45deg); transition: transform .15s;
-  }
-  .cat-more[aria-expanded="true"]::after { transform: rotate(-135deg); margin-top: 3px; }
-  .cat-items {
-    flex: 0 0 100%; margin: 0; padding: 9px 12px; border-radius: 6px;
-    background: var(--surface); font-size: .86rem; line-height: 1.55; color: var(--ink); word-break: keep-all;
-  }
-  .cat-row.is-off .cat-items { color: var(--muted); opacity: .55; text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 50%, transparent); }
-  /* 역 근처에 없는 항목은 흐리게 (뽑기에서 빠짐) */
-  .cat-items .is-far { color: var(--muted); opacity: .45; }
+  .cat-row.is-off .cat { background: transparent; border-color: var(--rule); color: var(--muted); }
+  /* 역 근처에 그 종류가 하나도 없으면 점선 테두리로 흐리게 (골라도 뽑히지 않음) */
+  .cat-row.is-none .cat { opacity: .45; border-style: dashed; }
   .cat-near { margin: -4px 0 0; font-size: .82rem; color: var(--muted); }
   .cat-near b { color: var(--ink); font-weight: 600; }
   .cat-credit { margin: 0; font-size: .66rem; color: var(--muted); text-align: right; }
@@ -1551,18 +1531,15 @@
 
     /* ---------- 밥·디저트·놀거리 종류 고르기 ---------- */
 
-    // 종류마다 세부 항목을 펼쳐 둔 것. 처음에는 다 접혀 있고, 화면을 다시 그려도 유지합니다(저장하지는 않습니다).
-    const openCats = {};
+    // 종류만 보여 줍니다(세부 항목은 뽑을 때 나오는 재미로 남겨 둠). 역 근처에 그 종류가 하나도 없으면 흐리게.
     function renderCats() {
       const key = STEPS[state.step].key;
       const off = offCats(key);
       const cats = catsOf(key);
-      const open = openCats[key] || (openCats[key] = new Set());
       els.catTitle.textContent = `뽑을 ${STEPS[state.step].short} 종류`;
-      els.catCount.textContent = `${DECKS[key].length}개 중 ${enabledItems(key).length}개 선택`;
-      // 역 근처 안내: 선택한 것 중 근처에 있는 몇 개에서 뽑는지. 펼친 목록에서는 근처에 없는 항목을 흐리게.
+      els.catCount.textContent = `${cats.length}종류 중 ${cats.length - cats.filter(c => off.has(c)).length}종류 선택`;
+      // 역 근처 안내: 선택한 것 중 근처에 있는 몇 개에서 뽑는지
       const nf = nearFilter(key, enabledItems(key));
-      const nearSet = nf.known && nf.scope !== 'all' ? new Set(nf.pool.map(i => i.label)) : null;
       const nearAll = nf.known ? new Set(nearFilter(key, DECKS[key]).pool.map(i => i.label)) : null;
       const where = state.station ? stationLabel(state.station.name) : '역';
       els.catNear.hidden = !nf.known;
@@ -1573,10 +1550,12 @@
         else if (nf.scope === 'wide') els.catNear.replaceChildren(`${where} 바로 근처엔 적어서 ${meters(NEAR.wide)} 안에 있는 `, n, '에서 뽑아요');
         else els.catNear.replaceChildren(`${where} 근처에 마땅한 곳이 적어서 선택한 `, n, ' 전부에서 뽑아요');
       }
-      els.catList.replaceChildren(...cats.map((cat, idx) => {
+      els.catList.replaceChildren(...cats.map(cat => {
         const items = DECKS[key].filter(i => i.cat === cat);
-        const li = make('li', 'cat-row' + (off.has(cat) ? ' is-off' : ''));
+        const none = !!nearAll && !items.some(i => nearAll.has(i.label));
+        const li = make('li', 'cat-row' + (off.has(cat) ? ' is-off' : '') + (none ? ' is-none' : ''));
         const b = make('button', 'cat', cat);
+        if (none) b.title = `${where} 근처에 없어요`;
         b.type = 'button';
         b.setAttribute('aria-pressed', String(!off.has(cat)));
         b.addEventListener('click', () => {
@@ -1588,31 +1567,7 @@
           setMsg('');
           renderCats();
         });
-        // 세부 항목: 알약 안 오른쪽의 ⌄를 누르면 펼치고 접습니다.
-        const list = make('p', 'cat-items');
-        items.forEach((i, n) => {
-          // 근처에 없는 항목: 지금 뽑는 범위(nearSet)가 있으면 그 기준, 종류를 꺼 둔 경우엔 근처 표 기준
-          const far = off.has(cat) ? (nearAll && !nearAll.has(i.label)) : (nearSet && !nearSet.has(i.label));
-          const s = make('span', far ? 'is-far' : null, i.label);
-          if (far) s.title = '역 근처에 없어요';
-          list.append(...(n ? [' · ', s] : [s]));
-        });
-        list.id = `cat-items-${idx}`;
-        list.hidden = !open.has(cat);
-        const more = make('button', 'cat-more');
-        more.type = 'button';
-        more.setAttribute('aria-expanded', String(open.has(cat)));
-        more.setAttribute('aria-controls', list.id);
-        more.setAttribute('aria-label', `${cat} 항목 ${items.length}개 보기`);
-        more.addEventListener('click', () => {
-          const show = !open.has(cat);
-          if (show) open.add(cat); else open.delete(cat);
-          more.setAttribute('aria-expanded', String(show));
-          list.hidden = !show;
-        });
-        const pill = make('span', 'cat-pill');
-        pill.append(b, more);
-        li.append(pill, list);
+        li.append(b);
         return li;
       }));
     }
@@ -1659,12 +1614,13 @@
     const loadRecent = () => { const sn = store.get(LAST_KEY); return resolveSnap(sn) ? sn : null; };
 
     // 공유 링크: 받은 사람도 같은 코스 화면으로 열립니다.
-    // 주소는 메시지에 그대로 보이므로 짧게: ?c=호선-역-밥-디저트-놀거리 (호선은 ID, 나머지는 각 목록에서의 순번)
-    // 순번이라서 나중에 목록 순서를 바꾸면 예전에 보낸 링크는 다른 항목을 가리킬 수 있습니다.
+    // 주소는 메시지에 그대로 보이므로 짧게: ?c=호선-역-밥-디저트-놀거리 (호선은 ID, 역은 순번, 나머지는 항목 번호)
+    // 항목 번호(sid)는 data.js의 SHARE_IDS에서 한 번 정하면 바뀌지 않아서, 목록을 고쳐도 예전 링크가 그대로 열립니다.
+    const bySid = (key, sid) => DECKS[key].find(i => i.sid === sid);
     function shareUrl(sn) {
       const c = resolveSnap(sn);
       const st = stationChoices(c.line).findIndex(x => x.name === c.station.name && x.origin === c.station.origin && x.n === c.station.n);
-      const code = [c.line.id, st, DECKS.food.indexOf(c.food), DECKS.dessert.indexOf(c.dessert), DECKS.play.indexOf(c.play)].join('-');
+      const code = [c.line.id, st, c.food.sid, c.dessert.sid, c.play.sid].join('-');
       return new URL(location.pathname, location.origin) + '?c=' + code;
     }
     function snapFromUrl() {
@@ -1677,7 +1633,7 @@
         const reg = REGIONS.find(r => r.lines.some(l => l.id === lineId));
         const line = reg && reg.lines.find(l => l.id === lineId);
         const st = line && stationChoices(line)[si];
-        const food = DECKS.food[fi], dessert = DECKS.dessert[di], play = DECKS.play[pi];
+        const food = bySid('food', fi), dessert = bySid('dessert', di), play = bySid('play', pi);
         if (!st || !food || !dessert || !play) return null;
         const sn = {
           region: reg.id, line: line.id, station: { name: st.name, origin: st.origin, n: st.n },
