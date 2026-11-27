@@ -136,6 +136,7 @@
     background: var(--line); color: var(--on-line);
     font: 400 1.9rem/1 var(--font-display);
   }
+  .badge.is-pill { width: auto; height: 40px; padding: 0 14px; border-radius: 20px; font-size: 1.15rem; white-space: nowrap; }
   .sign-name { min-width: 0; overflow-wrap: anywhere; font: 400 clamp(2.1rem, 10vw, 3.5rem)/1.08 var(--font-display); }
   .sign-name.is-long { font-size: clamp(1.6rem, 7vw, 2.7rem); }
   .sign-name.is-empty, .sign.is-rolling .sign-name { color: var(--muted); }
@@ -254,12 +255,7 @@
   .course .v a { color: var(--ink); text-underline-offset: 4px; text-decoration-thickness: 1.5px; }
   .course .v small { font: 400 .85rem/1.4 var(--font-body); color: var(--muted); }
 
-  .dot {
-    flex: none; align-self: center; width: 28px; height: 28px; border-radius: 50%;
-    display: inline-grid; place-items: center;
-    background: var(--c); color: var(--on);
-    font: 400 1.15rem/1 var(--font-display);
-  }
+  .dot { flex: none; align-self: center; width: 14px; height: 14px; border-radius: 50%; background: var(--c); }
 
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
@@ -432,8 +428,9 @@
       if (text != null) n.textContent = text;
       return n;
     };
+    // 코스 목록의 노선 색 표시 (이름 옆이라 숫자는 넣지 않습니다)
     const dot = line => {
-      const d = make('span', 'dot', isNum(line) ? line.short : '');
+      const d = make('span', 'dot');
       d.style.setProperty('--c', line.color);
       d.style.setProperty('--on', line.on);
       return d;
@@ -448,7 +445,8 @@
 
     /* ---------- 역명판: 뽑힌 결과를 보여 주는 판 ---------- */
 
-    const lineView = l => ({ line: l, name: l.name, left: region().name, right: `${stationCount(l)}개 역` });
+    // 호선 뽑기 화면은 이름이 곧 호선이라 동그라미를 따로 달지 않습니다. (② 2호선처럼 겹치지 않게)
+    const lineView = l => ({ line: l, noBadge: true, name: l.name, left: region().name, right: `${stationCount(l)}개 역` });
     const stationView = (l, s) => ({
       line: l, name: stationLabel(s.name), n: s.n,
       left: s.prev ? '‹ ' + s.prev : '종점',
@@ -483,9 +481,11 @@
     function paintSign(v) {
       const line = v.line || null;
       applySignFont(line || curLine());
-      els.badge.hidden = !line;
+      // 노선 표시: 숫자 노선은 동그라미에 숫자, 이름 노선은 알약 모양에 짧은 이름(수인분당, 인천1 …)
+      els.badge.hidden = !line || !!v.noBadge;
       if (line) {
-        els.badge.textContent = isNum(line) ? line.short : '';
+        els.badge.textContent = line.short;
+        els.badge.classList.toggle('is-pill', !isNum(line));
         els.badge.style.background = line.color;
         els.badge.style.color = line.on;
       }
