@@ -169,6 +169,12 @@
   .btn[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
   .btn[aria-disabled="true"]:active { transform: none; }
   .actions { display: grid; gap: 10px; }
+  /* 호선 목록이 길어도 뽑기 버튼이 화면 아래에 붙어 있게 합니다. */
+  .actions.is-docked {
+    position: sticky; bottom: 0; z-index: 2;
+    padding-top: 20px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(to bottom, transparent, var(--bg) 20px);
+  }
   .actions-row { display: flex; flex-wrap: wrap; gap: 8px; }
   .actions-row .btn { flex: 1 1 auto; }
   .toast { font-size: .88rem; color: var(--muted); min-height: 1.4em; }
@@ -235,7 +241,7 @@
 
     <div class="regions" id="regions"></div>
 
-    <details class="filter" id="filter" hidden>
+    <details class="filter" id="filter" open hidden>
       <summary id="filter-summary">뽑을 호선 고르기</summary>
       <div class="filter-body">
         <p class="note" id="filter-note" hidden>기본으로는 주요 노선만 켜져 있습니다. 나머지는 눌러서 켜면 함께 뽑힙니다.</p>
@@ -264,12 +270,13 @@
 
     <ol class="course" id="course" hidden></ol>
 
-    <div class="actions">
+    <div class="actions" id="actions">
       <button id="draw" class="btn btn-primary" type="button" hidden>뽑기</button>
       <button id="next" class="btn btn-primary" type="button" hidden>다음</button>
       <div class="actions-row">
         <button id="back" class="btn" type="button" hidden>이전</button>
         <button id="redraw" class="btn" type="button" hidden>다시 뽑기</button>
+        <button id="choose" class="btn" type="button" hidden>호선 목록</button>
         <button id="copy" class="btn" type="button" hidden>목록 복사</button>
         <button id="restart" class="btn" type="button" hidden>처음부터 다시</button>
       </div>
@@ -361,7 +368,7 @@
       toast: $('toast'), copyText: $('copy-text'),
       filter: $('filter'), filterSummary: $('filter-summary'), chips: $('line-chips'),
       filterNote: $('filter-note'), allDefault: $('all-default'),
-      regionBtn: $('region-btn'), live: $('live'),
+      regionBtn: $('region-btn'), choose: $('choose'), actions: $('actions'), live: $('live'),
     };
 
     const mapUrl = q => 'https://map.naver.com/p/search/' + encodeURIComponent(q);
@@ -437,6 +444,11 @@
     let busy = false;
     let rolling = null;      // 돌아가는 동안에만 { stop() }
     let nextLockUntil = 0;   // 멈춘 직후 잘못 눌린 "다음"을 잠깐 막습니다.
+    let choosing = false;    // 호선을 뽑은 뒤 "호선 목록"으로 다시 목록을 보는 중
+
+    // 호선 단계는 뽑기 전에는 호선 목록만, 뽑기 시작 후에는 뽑기 창만 보여 줍니다.
+    const hasLineChooser = () => region().lines.length > 1;
+    const chooserShown = () => STEPS[state.step].key === 'line' && !rolling && hasLineChooser() && (!state.line || choosing);
 
     // 뽑기를 누르면 후보가 계속 돌아가고, 한 번 더 누르면 그때 보이던 것으로 정해집니다.
     function startRoll(pool, show, commit) {
@@ -468,6 +480,12 @@
       };
       els.sign.classList.add('is-rolling');
       els.note.hidden = true;
+      const wasChoosing = !els.filter.hidden;
+      choosing = false;
+      els.filter.hidden = true;
+      els.actions.classList.remove('is-docked');
+      els.sign.hidden = false;
+      if (wasChoosing) window.scrollTo(0, 0);
       if (still) paintSign({ name: '뽑는 중', empty: true }); else tick();
       setMsg('멈추기를 누르면 지금 보이는 것으로 정해집니다.');
       syncActions();
@@ -493,8 +511,9 @@
       if (key === 'line') {
         const on = enabledLines();
         if (!on.length) {
-          setMsg('켜 둔 호선이 없습니다. 위 "뽑을 호선 고르기"에서 하나 이상 켜 주세요.');
-          els.filter.open = true;
+          choosing = true;
+          render();
+          setMsg('켜 둔 호선이 없습니다. "뽑을 호선 고르기"에서 하나 이상 켜 주세요.');
           return;
         }
         const others = on.filter(l => l.id !== state.line);
@@ -531,6 +550,7 @@
     function go(i) {
       if (busy || i < 0 || i > DONE || !reachable(i)) return;
       state.step = i;
+      choosing = false;
       save();
       disarmRestart();
       setMsg('');
@@ -669,6 +689,12 @@
       renderFilter();
     });
     els.regionBtn.addEventListener('click', () => go(0));
+    els.choose.addEventListener('click', () => {
+      if (busy) return;
+      choosing = true;
+      setMsg('');
+      render();
+    });
     $('all-on').addEventListener('click', () => setAllLines(true));
     $('all-off').addEventListener('click', () => setAllLines(false));
 
@@ -700,11 +726,13 @@
       const spinning = !!rolling;
       const has = isDrawStep(i) && !!state[STEPS[i].key];
       // 돌아가는 동안에는 멈추기 버튼 하나만 누를 수 있습니다.
-      els.draw.hidden = !isDrawStep(i) || (has && !spinning);
+      const chooser = chooserShown();
+      els.draw.hidden = !isDrawStep(i) || (has && !spinning && !chooser);
       els.draw.textContent = spinning ? '멈추기' : '뽑기';
-      els.next.hidden = !has || spinning;
+      els.next.hidden = !has || spinning || chooser;
       els.next.textContent = i < DONE - 1 ? `다음: ${STEPS[i + 1].title}` : '코스 보기';
-      els.redraw.hidden = !has || spinning;
+      els.redraw.hidden = !has || spinning || chooser;
+      els.choose.hidden = !(STEPS[i].key === 'line' && has && !spinning && !chooser && hasLineChooser());
       els.back.hidden = i === 0;
       els.back.setAttribute('aria-disabled', String(spinning));
       els.copy.hidden = i !== DONE;
@@ -722,9 +750,13 @@
       els.lede.textContent = ledeFor(key);
 
       els.regions.hidden = key !== 'region';
-      els.sign.hidden = !drawStep;
+      // 뽑기 창은 뽑은 결과가 있을 때만 보입니다. (돌아가는 동안은 startRoll이 보여 줍니다.)
+      const chooser = chooserShown();
+      els.sign.hidden = !(drawStep && !!state[key] && !chooser);
       els.course.hidden = key !== 'done';
-      els.filter.hidden = !(key === 'line' && region().lines.length > 1);
+      els.filter.hidden = !chooser;
+      if (chooser) els.filter.open = true;
+      els.actions.classList.toggle('is-docked', chooser);
       els.copyText.hidden = true;
 
       const showNote = key === 'station' && !!state.station;
