@@ -400,9 +400,6 @@
 
   .dot { flex: none; align-self: center; width: 14px; height: 14px; border-radius: 50%; background: var(--c); }
 
-  /* 이름 릴: 지금 이름과 다음 이름을 위아래로 쌓아 두고 통째로 밀어 올립니다(스크립트가 높이를 고정하고 잘라 냄). */
-  .reel-track, .reel-line { display: block; }
-
   /* 정해지는 순간: 카드가 쿵 하고 튀어 오르고(밝게 번쩍), 노선 색 빛이 바깥으로 퍼지고, 이름이 도장처럼 찍힙니다.
      꽃가루는 화면 위 캔버스(.burst)에 그립니다. */
   .burst { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 50; pointer-events: none; }
@@ -724,7 +721,7 @@
     const thumbReady = src => { const im = thumbs.get(src); return !!im && im.complete && im.naturalWidth > 0; };
     function paintItem(key, item, spinning) {
       els.itemCat.textContent = item ? item.cat : '';
-      setName(els.itemName, item ? item.label : '뽑는 중');
+      els.itemName.textContent = item ? item.label : '뽑는 중';
       // 누르면 뽑힌 역 근처에서 이 항목을 네이버 지도로 찾습니다.
       const near = state.station ? stationQuery(state.station.name) + ' ' : '';
       setCardLink(els.itemLink, !spinning && item ? near + item.q : null, item && `${near}${item.label} 네이버 지도에서 찾기`);
@@ -837,7 +834,7 @@
         els.badge.style.background = line.color;
         els.badge.style.color = line.on;
       }
-      setName(els.name, v.name);
+      els.name.textContent = v.name;
       // 역 결과는 누르면 네이버 지도로 (돌아가는 동안은 아님)
       setCardLink(els.signLink, !rolling && v.mapQuery ? v.mapQuery : null, v.mapQuery && `${v.name} 네이버 지도에서 보기`);
       els.name.classList.toggle('is-empty', !!v.empty);
@@ -877,48 +874,6 @@
     const catsOf = key => [...new Set(DECKS[key].map(i => i.cat))];
     const offCats = key => new Set(state.offCat[key] || []);
     const enabledItems = key => { const off = offCats(key); return DECKS[key].filter(i => !off.has(i.cat)); };
-
-    /* ---------- 이름 릴: 슬롯머신처럼 새 이름이 아래에서 밀려 올라옵니다 ---------- */
-
-    // reelNext가 있으면 다음 이름 바꾸기를 그 시간(ms)·속도 곡선으로 굴립니다. 없으면 바로 바뀝니다.
-    let reelNext = null;
-    const reelRuns = new Map(); // 이름 칸 → { anim, end }
-    function settleReel(el) {
-      const r = reelRuns.get(el);
-      if (!r) return;
-      reelRuns.delete(el);
-      r.anim.onfinish = null;
-      r.anim.cancel();
-      el.style.height = '';
-      el.style.overflow = '';
-      el.textContent = r.end;
-    }
-    function setName(el, text) {
-      if (reelNext) { reelTo(el, text, reelNext); return; }
-      settleReel(el);
-      el.textContent = text;
-    }
-    // opt: { ms, easing, frames(h) → 키프레임, end: 끝나고 남을 글자(기본은 text), done }
-    function reelTo(el, text, opt) {
-      settleReel(el);
-      const from = el.textContent;
-      const end = opt.end != null ? opt.end : text;
-      if (!opt.ms || (from === text && !opt.frames)) { el.textContent = end; if (opt.done) opt.done(); return; }
-      const h = el.getBoundingClientRect().height;
-      const track = make('span', 'reel-track');
-      track.append(make('span', 'reel-line', from), make('span', 'reel-line', text));
-      el.replaceChildren(track);
-      el.style.height = h + 'px';
-      el.style.overflow = 'hidden';
-      const frames = opt.frames ? opt.frames(h) : [{ transform: 'none' }, { transform: `translateY(${-h}px)` }];
-      const anim = track.animate(frames, { duration: opt.ms, easing: opt.easing || 'linear', fill: 'forwards' });
-      reelRuns.set(el, { anim, end });
-      anim.onfinish = () => {
-        if (!reelRuns.get(el) || reelRuns.get(el).anim !== anim) return;
-        settleReel(el);
-        if (opt.done) opt.done();
-      };
-    }
 
     /* ---------- 정해지는 순간의 효과 ---------- */
 
@@ -1024,14 +979,11 @@
       buzz([18, 40, 30]);
     }
 
-    // 뽑기를 누르면 후보가 계속 돌아가고(이름이 릴처럼 올라감), 한 번 더 누르면 슬롯머신처럼 몇 칸 더 가며
-    // 느려지다가, 마지막에 다음 후보가 아래에서 반쯤 고개를 내밀고 망설입니다(쪼는 맛). 그대로 넘어오기도 하고
-    // 다시 내려가기도 합니다(반반). 그렇게 멈춘 것으로 정해지고, 정해지는 순간 효과가 터집니다.
-    // labelOf: 후보의 이름(고개 내미는 이름에 씁니다)
-    function startRoll(pool, show, commit, labelOf) {
+    // 뽑기를 누르면 후보가 계속 돌아가고, 한 번 더 누르면 슬롯머신처럼 몇 칸 더 가며 느려지다가 멈춥니다.
+    // 마지막에 멈춘 것으로 정해지고, 정해지는 순간 효과가 터집니다.
+    function startRoll(pool, show, commit) {
       const itemStep = isItemStep(STEPS[state.step].key);
       const card = itemStep ? els.item : els.sign;
-      const nameEl = itemStep ? els.itemName : els.name;
       const finish = value => {
         rolling = null;
         landing = false;
@@ -1046,19 +998,19 @@
       const still = reduceMotion.matches; // 움직임 줄이기 설정이면 깜빡이지 않고 멈출 때 뽑습니다.
       let current = pickOne(pool);
       let timer = null;
-      const other = v => (v === current ? pool[(pool.indexOf(v) + 1) % pool.length] : v);
-      // 다음 후보로: 이름은 ms 동안 릴처럼 밀려 올라옵니다.
-      const advance = (ms, easing) => {
-        current = other(pickOne(pool));
-        reelNext = ms ? { ms, easing } : null;
-        try { show(current); } finally { reelNext = null; }
+      const advance = () => {
+        let v = pickOne(pool);
+        if (v === current) v = pool[(pool.indexOf(v) + 1) % pool.length];
+        current = v;
+        show(current);
       };
-      const tick = () => { advance(55); timer = setTimeout(tick, 70); };
-      // 멈추기를 누른 뒤 한 칸씩 넘어가는 간격(ms): 처음엔 빠르다가 끝으로 갈수록 확 느려집니다.
-      // 몇 칸 더 갈지(8~13칸)와 마지막 칸의 뜸은 매번 랜덤이라, 언제 멈출지 알 수 없습니다.
+      const tick = () => { advance(); timer = setTimeout(tick, 70); };
+      // 멈추기를 누른 뒤 한 칸씩 넘어가는 간격(ms): 처음엔 빠르다가 끝으로 갈수록 확 느려져서 쫄깃하게 멈춥니다.
+      // 몇 칸 더 갈지(8~13칸)와 마지막 칸의 뜸(0.55~0.75초)은 매번 랜덤이라, 언제 멈출지 알 수 없습니다.
+      // 모두 합쳐 대략 2~4초
       const slowGaps = () => {
         const n = 8 + Math.floor(Math.random() * 6);
-        const end = 480 + Math.random() * 160;
+        const end = 550 + Math.random() * 200;
         return Array.from({ length: n }, (_, k) => {
           const t = k / (n - 1);
           return Math.round(70 + (end - 70) * Math.pow(t, 2.1));
@@ -1075,39 +1027,13 @@
           const gaps = slowGaps();
           let k = 0;
           const step = () => {
-            if (k === gaps.length) { peek(); return; }
-            // 느려질수록 새 이름이 더 천천히, 끝에서 브레이크를 밟듯 기어 올라옵니다.
-            const t = k / (gaps.length - 1);
-            advance(Math.round(gaps[k] * (.7 + .25 * t)), t < .3 ? 'linear' : 'cubic-bezier(.15, .85, .25, 1)');
-            const lift = 2 + 3 * t;
+            if (k === gaps.length) { finish(current); return; }
+            advance();
+            // 느려질수록 한 칸 넘어갈 때 카드가 더 크게 들썩입니다.
+            const lift = 3 + 5 * (k / (gaps.length - 1));
             card.animate([{ transform: `translateY(-${lift.toFixed(1)}px)` }, { transform: 'none' }], { duration: Math.min(220, 120 + gaps[k] / 4), easing: 'ease-out' });
             buzz(6);
             timer = setTimeout(step, gaps[k++]);
-          };
-          // 쪼는 맛: 다음 후보 이름이 아래에서 천천히 반쯤 올라와 멈칫멈칫하다가, 넘어오거나 다시 내려갑니다.
-          const peek = () => {
-            settleReel(nameEl);
-            const next = other(pickOne(pool));
-            const through = Math.random() < .5;
-            buzz([8, 200, 8, 200, 8]);
-            reelTo(nameEl, labelOf(next), {
-              ms: 1800,
-              end: through ? labelOf(next) : nameEl.textContent,
-              frames: h => {
-                const d = h * (.3 + Math.random() * .25); // 얼마나 고개를 내밀지도 매번 다르게
-                return [
-                  { transform: 'none', offset: 0, easing: 'cubic-bezier(.2, .8, .3, 1)' },
-                  { transform: `translateY(${-d}px)`, offset: .45 },
-                  { transform: `translateY(${-d + 4}px)`, offset: .58 },
-                  { transform: `translateY(${-d - 2}px)`, offset: .7, easing: through ? 'cubic-bezier(.6, 0, .9, .5)' : 'cubic-bezier(.3, 1.5, .6, 1)' },
-                  { transform: through ? `translateY(${-h}px)` : 'none', offset: 1 },
-                ];
-              },
-              done: () => {
-                if (through) { current = next; show(current); }
-                finish(current);
-              },
-            });
           };
           step();
         },
@@ -1155,7 +1081,7 @@
           if (pick.id !== state.line) state.station = null;
           state.line = pick.id;
           finishDraw(pick.name);
-        }, l => lineView(l).name);
+        });
         return;
       }
 
@@ -1166,7 +1092,7 @@
         startRoll(pool, s => paintSign(stationView(line, s)), pick => {
           state.station = pick;
           finishDraw(stationLabel(pick.name));
-        }, s => stationView(line, s).name);
+        });
         return;
       }
 
@@ -1184,7 +1110,7 @@
       startRoll(pool, i => paintItem(key, i, !!rolling), pick => {
         state[key] = pick.label;
         finishDraw(pick.label);
-      }, i => i.label);
+      });
     }
 
     function go(i) {
