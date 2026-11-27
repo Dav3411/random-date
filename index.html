@@ -478,6 +478,7 @@
         els.sign.classList.remove('is-rolling');
         commit(value);
       };
+      choosing = false; // 뽑기를 시작하면 호선 목록은 닫습니다(후보가 하나라 바로 정해져도).
       if (pool.length < 2) { finish(pool[0]); return; } // 후보가 하나면 바로 정해집니다.
       const still = reduceMotion.matches; // 움직임 줄이기 설정이면 깜빡이지 않고 멈출 때 뽑습니다.
       let current = pickOne(pool);
@@ -500,7 +501,6 @@
       };
       els.sign.classList.add('is-rolling');
       const wasChoosing = !els.filter.hidden;
-      choosing = false;
       els.filter.hidden = true;
       els.actions.classList.remove('is-docked');
       els.sign.hidden = false;
@@ -540,7 +540,8 @@
           setMsg('켜 둔 호선이 하나뿐이라 다시 뽑아도 같습니다.');
           return;
         }
-        startRoll(others.length ? others : on, l => paintSign(lineView(l)), pick => {
+        // 다시 뽑을 때는 지금 호선을 빼고 돌리되, 그러면 하나만 남는 경우(켜 둔 호선 2개)는 둘 다 돌립니다.
+        startRoll(others.length >= 2 ? others : on, l => paintSign(lineView(l)), pick => {
           if (pick.id !== state.line) state.station = null;
           state.line = pick.id;
           finishDraw(pick.name);
