@@ -90,13 +90,12 @@
     padding: 4px 0; border: 0; background: none; color: var(--ink); cursor: pointer;
     font: 400 1.2rem/1 var(--font-display); letter-spacing: .02em;
   }
-  /* 도넛 아이콘 (호선을 뽑으면 그 호선 색) */
+  /* 도넛 아이콘 (초록). 글자의 실제 높이(약 15px)에 맞추고, 글자 모양 가운데로 1px 올립니다. */
   .brand-dot {
-    flex: none; width: 18px; height: 18px; border-radius: 50%;
-    background: var(--bg); border: 5px solid var(--ink);
-    transition: border-color .35s;
+    flex: none; width: 15px; height: 15px; border-radius: 50%;
+    background: var(--bg); border: 4px solid #00A84D;
+    position: relative; top: -1px;
   }
-  .bar.has-line .brand-dot { border-color: var(--line-stroke); }
 
   /* 처음 화면 */
   .home { display: grid; gap: 32px; padding-top: 10vh; }
