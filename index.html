@@ -361,8 +361,10 @@
   .chip {
     min-width: 42px; height: 42px; padding: 0 13px; border-radius: 21px;
     border: 2px solid var(--c); background: var(--c); color: var(--on);
-    font: 400 1.1rem/1 var(--font-display); cursor: pointer;
+    font: var(--sign-weight, 400) 1.1rem/1 var(--sign-font, var(--font-display)); cursor: pointer;
+    display: inline-grid; place-items: center; white-space: nowrap;
   }
+  .chip > span { display: block; } /* 글자를 재서 가운데로 옮길 수 있게(centerInk) */
   .chip.is-num { width: 42px; padding: 0; font-size: 1.3rem; }
   .chip[aria-pressed="false"] { background: transparent; border-color: var(--rule); color: var(--muted); }
 
@@ -760,11 +762,12 @@
       hyGyeon: ["'Gothic A1', 'Do Hyeon', sans-serif", 900],
       hyHeadline: ["'Gothic A1', 'Do Hyeon', sans-serif", 800],
     };
-    function applySignFont(line) {
+    // 노선의 역명판 글꼴을 el에 --sign-font / --sign-weight로 넣습니다. (역명판 카드, 호선 고르기 칩)
+    function applySignFont(line, el = els.sign) {
       const key = (line && line.font) || region().font;
       const [family, weight] = SIGN_FONTS[key] || [null, null];
-      els.sign.style.setProperty('--sign-font', family || 'var(--font-display)');
-      els.sign.style.setProperty('--sign-weight', weight || 400);
+      el.style.setProperty('--sign-font', family || 'var(--font-display)');
+      el.style.setProperty('--sign-weight', weight || 400);
     }
 
     // 원 안 글자를 눈으로 보이는 가운데에: 글꼴의 기준선과 실제 글자 모양(잉크) 위아래를 재서 그만큼 옮깁니다.
@@ -793,8 +796,13 @@
       centerInk(els.badge, [...els.badge.children]);
       centerInk(els.order, [...els.order.children]);
     }
+    // 호선 고르기 칩도 같은 방식으로 글자를 가운데에
+    function centerChips() {
+      if (els.filter.hidden) return;
+      for (const b of els.chips.children) centerInk(b, [...b.children]);
+    }
     // 글꼴이 늦게 도착하면 다시 맞춥니다.
-    if (document.fonts) document.fonts.addEventListener('loadingdone', () => { if (!els.sign.hidden) centerSignMarks(); });
+    if (document.fonts) document.fonts.addEventListener('loadingdone', () => { if (!els.sign.hidden) centerSignMarks(); centerChips(); });
 
     function paintSign(v) {
       const line = v.line || null;
@@ -1320,10 +1328,13 @@
       const off = offSet();
       renderTabs();
       els.chips.replaceChildren(...region().lines.map(l => {
-        const b = make('button', 'chip' + (isNum(l) ? ' is-num' : ''), l.short);
+        // 칩 글자: 역명판과 같은 글꼴(운영사별)과 같은 글자색(수인분당선만 검정, 나머지 흰색)
+        const b = make('button', 'chip' + (isNum(l) ? ' is-num' : ''));
+        b.append(make('span', null, l.short));
         b.type = 'button';
         b.style.setProperty('--c', l.color);
         b.style.setProperty('--on', l.on);
+        applySignFont(l, b);
         b.setAttribute('aria-label', l.name);
         b.setAttribute('aria-pressed', String(!off.has(l.id)));
         b.addEventListener('click', () => {
@@ -1339,6 +1350,7 @@
         });
         return b;
       }));
+      centerChips();
       updateCount();
       renderMap();
     }
