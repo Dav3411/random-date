@@ -87,9 +87,9 @@
     background: var(--bg); border: 5px solid var(--rule);
     transition: border-color .35s, background-color .35s;
   }
-  /* 정거장은 모두 가운데가 빈 도넛. 지나온 곳은 호선 색, 지금 단계는 조금 크게 */
+  /* 정거장은 모두 가운데가 빈 도넛. 지나온 곳은 호선 색 */
   .is-done .stopbtn::before { border-color: var(--line-stroke); }
-  .is-current .stopbtn::before { border-color: var(--ink); transform: scale(1.18); }
+  .is-current .stopbtn::before { border-color: var(--ink); }
   /* 호선이 뽑히면 지금 단계의 도넛도 그 호선 색으로 */
   .progress.has-line .is-current .stopbtn::before { border-color: var(--line-stroke); }
   .is-current .stop-label { color: var(--ink); font-weight: 600; }
