@@ -639,19 +639,48 @@
       }
     }
 
-    // 밥·디저트·놀거리 카드. 돌아가는 동안에는 이름만 바꾸고(사진을 한꺼번에 받지 않게), 멈추면 사진을 보여 줍니다.
+    // 밥·디저트·놀거리 카드. 돌아가는 동안에는 이름과 함께 작은 사진이 바뀌고, 멈추면 큰 사진을 보여 줍니다.
     const isItemStep = key => !!DECKS[key];
     const photoOf = (key, label) => (typeof PHOTOS !== 'undefined' && PHOTOS[key] && PHOTOS[key][label]) || null;
+    // 돌아가는 동안 쓰는 작은 사진(240px, img/<종류>/s/NN.jpg). 한 벌이 0.3~0.5MB라 단계에 들어올 때 미리 받아 둡니다.
+    // (큰 사진을 다 받으면 한 벌에 2~3.5MB라, 큰 사진은 뽑힌 것만 받습니다.)
+    const thumbOf = src => src.replace(/([^/]+)$/, 's/$1');
+    const thumbs = new Map(); // 작은 사진 주소 → Image
+    function preloadThumbs(key, items) {
+      for (const item of items) {
+        const p = photoOf(key, item.label);
+        const src = p && thumbOf(p.src);
+        if (!src || thumbs.has(src)) continue;
+        const im = new Image();
+        im.src = src;
+        thumbs.set(src, im);
+      }
+    }
+    const thumbReady = src => { const im = thumbs.get(src); return !!im && im.complete && im.naturalWidth > 0; };
     function paintItem(key, item, spinning) {
       els.itemCat.textContent = item ? item.cat : '';
       els.itemName.textContent = item ? item.label : '뽑는 중';
       // 누르면 뽑힌 역 근처에서 이 항목을 네이버 지도로 찾습니다.
       const near = state.station ? stationQuery(state.station.name) + ' ' : '';
       setCardLink(els.itemLink, !spinning && item ? near + item.q : null, item && `${near}${item.label} 네이버 지도에서 찾기`);
-      const p = !spinning && item ? photoOf(key, item.label) : null;
+      const p = item ? photoOf(key, item.label) : null;
+      if (spinning) {
+        // 돌아가는 동안: 받아 둔 작은 사진으로 바꿉니다. 아직 못 받은 사진은 건너뛰고 앞의 사진을 그대로 둡니다.
+        const t = p && thumbOf(p.src);
+        if (t && thumbReady(t)) {
+          els.itemImg.onload = null;
+          if (els.itemImg.getAttribute('src') !== t) els.itemImg.src = t;
+          els.itemImg.alt = '';
+          els.itemImg.hidden = false;
+        }
+        els.itemCredit.hidden = true; // 출처는 멈춘 사진에만 붙입니다.
+        return;
+      }
       if (p) {
         if (els.itemImg.getAttribute('src') !== p.src) {
-          els.itemImg.hidden = true;
+          // 돌다가 멈췄으면 같은 항목의 작은 사진이 보이고 있으니 그대로 두고, 큰 사진이 도착하면 바뀝니다.
+          const showingThumb = !els.itemImg.hidden && els.itemImg.getAttribute('src') === thumbOf(p.src);
+          if (!showingThumb) els.itemImg.hidden = true;
           els.itemImg.onload = () => { els.itemImg.hidden = false; };
           els.itemImg.src = p.src;
         } else {
@@ -814,6 +843,7 @@
       els.filter.hidden = true;
       els.catFilter.hidden = true;
       card.hidden = false;
+      if (itemStep) els.itemImg.hidden = true; // 앞에 보이던 사진은 치우고, 돌아가는 사진으로 채웁니다.
       if (wasChoosing) window.scrollTo(0, 0);
       if (still) { if (itemStep) paintItem(STEPS[state.step].key, null, true); else paintSign({ name: '뽑는 중', empty: true }); } else tick();
       setMsg('');
@@ -876,6 +906,7 @@
       // 지금 것을 빼고 돌리되, 그러면 하나만 남는 경우는 다 돌립니다.
       const others = on.filter(i => i.label !== state[key]);
       const pool = others.length >= 2 ? others : on;
+      preloadThumbs(key, pool);
       startRoll(pool, i => paintItem(key, i, !!rolling), pick => {
         state[key] = pick.label;
         finishDraw(pick.label);
@@ -1709,7 +1740,10 @@
 
       if (kind === 'plain') paintSign({ line: curLine(), name: '?', empty: true, n: '?' });
       else if (drawStep && !isItemStep(key)) paintSign(signFor(key));
-      if (isItemStep(key)) paintItem(key, itemOf(key), false);
+      if (isItemStep(key)) {
+        preloadThumbs(key, enabledItems(key)); // 이 단계에 들어오면 돌릴 때 쓸 작은 사진을 미리 받습니다.
+        paintItem(key, itemOf(key), false);
+      }
       if (kind === 'line') renderFilter();
       if (kind === 'cat') renderCats();
       if (key === 'done') renderCourse(resolveSnap(snapFromState()));
