@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>랜덤 데이트</title>
+<title>랜덤 역 데이트</title>
 <meta name="description" content="지역을 고르고 지하철 호선, 종점에서 몇 번째 역, 밥, 디저트, 놀거리를 한 화면에 하나씩 뽑아 데이트 코스를 정합니다.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='23' fill='%23fff' stroke='%2300A84D' stroke-width='12'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -109,7 +109,8 @@
     content: ""; position: absolute; inset: -44px -16px; z-index: -1; pointer-events: none;
     background: radial-gradient(closest-side, var(--bg) 64%, transparent);
   }
-  .home-title { margin: 0; font: 400 clamp(3.6rem, 19vw, 6rem)/.95 var(--font-display); }
+  /* 좁은 휴대폰에서도 제목이 한 줄에 들어가는 크기 */
+  .home-title { margin: 0; font: 400 clamp(3.2rem, 16.5vw, 6rem)/.95 var(--font-display); white-space: nowrap; }
   .home-copy { display: grid; gap: 8px; max-width: 21em; }
   .home-q { font: 400 1.4rem/1.3 var(--font-display); }
   .home-a { color: var(--muted); font-size: .98rem; }
@@ -363,7 +364,7 @@
 <div class="wrap">
   <header class="bar" id="bar">
     <div class="bar-top">
-      <button class="brand" id="brand" type="button" aria-label="랜덤 데이트 처음 화면으로"><span class="brand-dot" aria-hidden="true"></span>랜덤 데이트</button>
+      <button class="brand" id="brand" type="button" aria-label="랜덤 역 데이트 처음 화면으로"><span class="brand-dot" aria-hidden="true"></span>랜덤 역 데이트</button>
     </div>
     <nav aria-label="뽑힌 선택지" id="progress-nav">
       <ol class="progress" id="progress"></ol>
@@ -374,7 +375,7 @@
     <!-- 처음 화면: 제목, 가장 최근 코스 하나 -->
     <section class="home" id="home" hidden>
       <div class="home-head">
-        <h1 class="home-title">랜덤 데이트</h1>
+        <h1 class="home-title">랜덤 역 데이트</h1>
         <div class="home-copy">
           <p class="home-q">어디서 뭐 할지, 또 고민 중인가요?</p>
           <p class="home-a">‘아무거나’는 이제 그만. 내릴 역부터 밥, 디저트, 놀거리까지 전부 뽑기에 맡겨 보세요.</p>
@@ -1558,7 +1559,7 @@
       const text = `${c.line.name} ${stationLabel(c.station.name)} · ${sn.food} · ${sn.dessert} · ${sn.play}`;
       if (navigator.share) {
         try {
-          await navigator.share({ title: '랜덤 데이트 코스', text, url });
+          await navigator.share({ title: '랜덤 역 데이트 코스', text, url });
           return;
         } catch (e) {
           if (e && e.name === 'AbortError') return; // 공유 창을 닫은 경우
