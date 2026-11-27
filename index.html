@@ -87,8 +87,9 @@
     background: var(--bg); border: 5px solid var(--rule);
     transition: border-color .35s, background-color .35s;
   }
-  .is-done .stopbtn::before { background: var(--line-stroke); border-color: var(--line-stroke); }
-  .is-current .stopbtn::before { border-color: var(--ink); }
+  /* 정거장은 모두 가운데가 빈 도넛. 지나온 곳은 호선 색, 지금 단계는 조금 크게 */
+  .is-done .stopbtn::before { border-color: var(--line-stroke); }
+  .is-current .stopbtn::before { border-color: var(--ink); transform: scale(1.18); }
   /* 호선이 뽑히면 지금 단계의 도넛도 그 호선 색으로 */
   .progress.has-line .is-current .stopbtn::before { border-color: var(--line-stroke); }
   .is-current .stop-label { color: var(--ink); font-weight: 600; }
@@ -511,7 +512,7 @@
       els.sign.hidden = false;
       if (wasChoosing) window.scrollTo(0, 0);
       if (still) paintSign({ name: '뽑는 중', empty: true }); else tick();
-      setMsg('멈추기를 누르면 지금 보이는 것으로 정해집니다.');
+      setMsg('');
       syncActions();
       els.draw.focus({ preventScroll: true });
     }
@@ -741,6 +742,13 @@
       const scale = Math.min((W - 2 * pad) / Math.max(maxX - minX, 1e-9), (H - 2 * pad) / Math.max(maxY - minY, 1e-9), 2 ** 23);
       const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
       const toScreen = ([px, py]) => [(px - cx) * scale + W / 2, (py - cy) * scale + H / 2];
+      // 멀리서 볼수록(넓은 지역) 선과 도넛을 가늘고 작게, 켜 둔 노선이 많으면 조금 더 줄입니다.
+      const zoom = Math.log2(scale / 256);
+      const near = Math.min(1, Math.max(0, (zoom - 8) / 3)); // 줌 8 이하 0, 11 이상 1
+      const dense = focus.length > 8 ? 0.85 : 1;
+      const lineW = (2 + 1.5 * near) * dense;
+      const ringR = (3 + 1.5 * near) * dense;
+      const ringW = (1.6 + 1.4 * near) * dense;
       const pointsOf = pts => pts.map(p => toScreen(p).map(v => v.toFixed(1)).join(',')).join(' ');
 
       const svg = mapEls.svg;
@@ -792,18 +800,18 @@
       }
 
       // 켜 둔 노선: 바탕색 테두리를 둘러 겹쳐도 구분되게
-      for (const x of all) if (x.on) for (const p of x.paths) nodes.push(line(p, { stroke: bg, 'stroke-width': 6, 'stroke-opacity': 0.9 }));
+      for (const x of all) if (x.on) for (const p of x.paths) nodes.push(line(p, { stroke: bg, 'stroke-width': (lineW + 2.5).toFixed(2), 'stroke-opacity': 0.9 }));
       for (const x of all) if (x.on) {
         const g = el('g', {});
         const title = el('title', {});
         title.textContent = x.line.name;
-        g.append(title, ...x.paths.map(p => line(p, { stroke: x.line.color, 'stroke-width': 3.5 })));
+        g.append(title, ...x.paths.map(p => line(p, { stroke: x.line.color, 'stroke-width': lineW.toFixed(2) })));
         nodes.push(g);
       }
       // 노선의 처음과 끝은 가운데가 빈 도넛으로 표시합니다.
       for (const x of all) if (x.on) for (const p of terminiOf(x.line)) {
         const [sx, sy] = toScreen(p).map(v => v.toFixed(1));
-        nodes.push(el('circle', { cx: sx, cy: sy, r: 4.5, fill: bg, stroke: x.line.color, 'stroke-width': 3 }));
+        nodes.push(el('circle', { cx: sx, cy: sy, r: ringR.toFixed(2), fill: bg, stroke: x.line.color, 'stroke-width': ringW.toFixed(2) }));
       }
       const names = all.filter(x => x.on).map(x => x.line.name);
       svg.setAttribute('aria-label', names.length ? `켜 둔 노선 지도: ${names.join(', ')}` : '켜 둔 노선이 없습니다');
