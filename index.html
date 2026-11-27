@@ -1305,6 +1305,7 @@
     /* ---------- 처음 화면 배경 ---------- */
 
     // 노선도 조각이 얼기설기 깔린 큰 판 하나가 통째로 한 방향으로 천천히 흘러갑니다.
+    // 그 위에서 선 하나하나가 가끔 사라졌다가 다시 뻗어 나옵니다.
     // 선은 가로·세로·45도로만 꺾이고, 양 끝은 종점 표시처럼 도넛 모양입니다.
     // 판은 화면보다 큰 정사각형이고 위아래·좌우가 서로 이어져 있어서 끊김 없이 계속 흐릅니다.
     const homeBg = (() => {
@@ -1321,6 +1322,12 @@
       const RING_GAP = 30;        // 끝 도넛과 다른 선 사이 최소 거리
       const END_GAP = 64;         // 끝 도넛끼리 최소 거리
       const CROSS_BAND = 20, CROSS_MAX = 7; // 한 번 가로지르는 것만 허용 (나란히 붙어 가거나 두 번 만나면 탈락)
+      // 선 하나하나의 움직임: 대부분은 다 그려진 채 머물다가, 가끔 출발한 쪽부터 사라지고 잠시 뒤 다시 뻗어 나옵니다.
+      const DRAW = 80;            // 뻗고 사라지는 빠르기(초당 px)
+      const REST = 1.5;           // 사라진 뒤 다시 나오기까지 쉬는 시간(초)
+      const FADE = .5;            // 나타나고 사라질 때 흐려지는 시간(초)
+      const HOLD = [14, 40];      // 다 그려진 채 머무는 시간(초) 범위. 선마다 다릅니다.
+      const ease = p => p * p * (3 - 2 * p);
       let routes = [], palette = COLORS, bg = '#fff';
       let T = 0, W = 0, H = 0, CH = 0, dpr = 1, speed = 1, raf = 0, t0 = 0;
 
@@ -1341,6 +1348,7 @@
       // 판 만들기: 자리마다 선을 하나씩 놓되, 다른 선과 어색하게 붙지 않는 모양이 나올 때까지 다시 뽑습니다.
       function generate() {
         const rand = rng(SEED);
+        const randT = rng(SEED + 1000); // 움직이는 때를 정하는 난수 (판 모양과는 따로)
         const cols = T / CELL;
         const grid = new Map(); // 칸 번호 → 그 칸의 점들 [x, y, 선 번호, 끝점인지]
         const key = (cx, cy) => (((cx % cols) + cols) % cols) + (((cy % cols) + cols) % cols) * cols;
@@ -1419,18 +1427,28 @@
               if (!grid.has(k)) grid.set(k, []);
               grid.get(k).push([wrap(p[0]), wrap(p[1]), out.length, i === 0 || i === dots.length - 1]);
             });
-            // 꺾이는 곳은 둥글게
+            // 꺾이는 곳은 둥글게. poly는 같은 모양을 잘게 나눈 점들로, 선을 일부만 그릴 때 씁니다.
             const path = new Path2D();
+            const poly = [pts[0]];
             path.moveTo(pts[0][0], pts[0][1]);
             for (let s = 1; s < pts.length - 1; s++) {
-              const a = toward(pts[s], pts[s - 1], BEND), b = toward(pts[s], pts[s + 1], BEND);
+              const a = toward(pts[s], pts[s - 1], BEND), b = toward(pts[s], pts[s + 1], BEND), c = pts[s];
               path.lineTo(a[0], a[1]);
-              path.quadraticCurveTo(pts[s][0], pts[s][1], b[0], b[1]);
+              path.quadraticCurveTo(c[0], c[1], b[0], b[1]);
+              poly.push(a);
+              for (let k = 1; k <= 6; k++) {
+                const u = k / 6, v = 1 - u;
+                poly.push([v * v * a[0] + 2 * v * u * c[0] + u * u * b[0], v * v * a[1] + 2 * v * u * c[1] + u * u * b[1]]);
+              }
             }
             const last = pts[pts.length - 1];
             path.lineTo(last[0], last[1]);
+            poly.push(last);
+            const cum = [0]; // 출발점에서 각 점까지의 거리
+            for (let k = 1; k < poly.length; k++) cum.push(cum[k - 1] + Math.hypot(poly[k][0] - poly[k - 1][0], poly[k][1] - poly[k - 1][1]));
+            const len = cum[cum.length - 1], run = len / DRAW, hold = HOLD[0] + randT() * (HOLD[1] - HOLD[0]);
             out.push({
-              path, ci, ends: [pts[0], last],
+              path, poly, cum, len, run, hold, cycle: hold + run * 2 + REST, at: randT(), ci, ends: [pts[0], last],
               x0: Math.min(...xs) + tx - 12, x1: Math.max(...xs) + tx + 12,
               y0: Math.min(...ys) + ty - 12, y1: Math.max(...ys) + ty + 12,
             });
@@ -1464,28 +1482,61 @@
         tint();
       }
 
+      // 선 하나의 지금 모습: [보이는 구간의 시작 거리, 끝 거리, 진하기]. 쉬는 중이면 null.
+      // 한 바퀴: 머물기 → 출발한 쪽부터 사라지기 → 쉬기 → 출발점에서 다시 뻗기
+      function stateOf(r, sec) {
+        const t = (sec + r.at * r.cycle) % r.cycle;
+        if (t < r.hold) return [0, r.len, 1];
+        const e = t - r.hold;
+        if (e < r.run) return [ease(e / r.run) * r.len, r.len, Math.min(1, (r.run - e) / FADE)];
+        const d = e - r.run - REST;
+        return d < 0 ? null : [0, ease(d / r.run) * r.len, Math.min(1, d / FADE)];
+      }
+      // 선 위에서 출발점으로부터 d만큼 간 지점
+      function pointAt(r, d) {
+        let k = 1;
+        while (k < r.cum.length - 1 && r.cum[k] < d) k++;
+        const u = (d - r.cum[k - 1]) / (r.cum[k] - r.cum[k - 1] || 1);
+        return [r.poly[k - 1][0] + (r.poly[k][0] - r.poly[k - 1][0]) * u, r.poly[k - 1][1] + (r.poly[k][1] - r.poly[k - 1][1]) * u];
+      }
+
       // 판을 (ox, oy)만큼 민 모습을 그립니다. 판을 사방으로 이어 붙여 화면에 걸친 선만 그립니다.
-      function draw(ox, oy) {
+      // sec가 없으면(움직임 줄이기) 모든 선을 다 그려진 채로 그립니다.
+      function draw(ox, oy, sec) {
         ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = 1;
         ctx.clearRect(0, 0, cv.width, cv.height);
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
         const seen = [];
-        for (const r of routes) for (let i = -2; i <= 1; i++) for (let j = -2; j <= 1; j++) {
-          const dx = ox + i * T, dy = oy + j * T;
-          if (r.x1 + dx > 0 && r.x0 + dx < W && r.y1 + dy > 0 && r.y0 + dy < CH) seen.push([r, dx, dy]);
+        for (const r of routes) {
+          const st = sec == null ? [0, r.len, 1] : stateOf(r, sec);
+          if (!st) continue;
+          for (let i = -2; i <= 1; i++) for (let j = -2; j <= 1; j++) {
+            const dx = ox + i * T, dy = oy + j * T;
+            if (r.x1 + dx > 0 && r.x0 + dx < W && r.y1 + dy > 0 && r.y0 + dy < CH) seen.push([r, dx, dy, st]);
+          }
         }
         ctx.lineWidth = LINE;
-        for (const [r, dx, dy] of seen) {
+        for (const [r, dx, dy, [a, b, alpha]] of seen) {
           ctx.setTransform(dpr, 0, 0, dpr, dx * dpr, dy * dpr);
+          ctx.globalAlpha = alpha;
           ctx.strokeStyle = palette[r.ci];
-          ctx.stroke(r.path);
+          if (a <= 0 && b >= r.len) { ctx.stroke(r.path); continue; }
+          // 일부만 보이는 선: 보이는 구간만 잇습니다.
+          const p = pointAt(r, a), q = pointAt(r, b);
+          ctx.beginPath();
+          ctx.moveTo(p[0], p[1]);
+          for (let k = 0; k < r.poly.length; k++) if (r.cum[k] > a && r.cum[k] < b) ctx.lineTo(r.poly[k][0], r.poly[k][1]);
+          ctx.lineTo(q[0], q[1]);
+          ctx.stroke();
         }
-        // 도넛은 선 위에 얹습니다.
+        // 도넛은 선 위에 얹습니다. 움직이는 선은 보이는 구간의 양 끝에 도넛이 따라갑니다.
         ctx.lineWidth = 4; ctx.fillStyle = bg;
-        for (const [r, dx, dy] of seen) {
+        for (const [r, dx, dy, [a, b, alpha]] of seen) {
           ctx.setTransform(dpr, 0, 0, dpr, dx * dpr, dy * dpr);
+          ctx.globalAlpha = alpha;
           ctx.strokeStyle = palette[r.ci];
-          for (const e of r.ends) {
+          for (const e of a <= 0 && b >= r.len ? r.ends : [pointAt(r, a), pointAt(r, b)]) {
             ctx.beginPath();
             ctx.arc(e[0], e[1], RING, 0, Math.PI * 2);
             ctx.fill(); ctx.stroke();
@@ -1495,7 +1546,7 @@
 
       function frame(now) {
         const sec = (now - t0) / 1000;
-        draw(wrap(VX * speed * sec), wrap(VY * speed * sec));
+        draw(wrap(VX * speed * sec), wrap(VY * speed * sec), sec);
         raf = requestAnimationFrame(frame);
       }
 
