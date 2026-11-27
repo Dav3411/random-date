@@ -380,6 +380,30 @@
 
   .dot { flex: none; align-self: center; width: 14px; height: 14px; border-radius: 50%; background: var(--c); }
 
+  /* 정해지는 순간: 카드가 쿵 하고 튀어 오르고(밝게 번쩍), 노선 색 빛이 바깥으로 퍼지고, 이름이 도장처럼 찍힙니다.
+     꽃가루는 화면 위 캔버스(.burst)에 그립니다. */
+  .burst { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 50; pointer-events: none; }
+  .sign.is-picked, .item-card.is-picked {
+    animation: pick-pop .6s cubic-bezier(.2, .8, .3, 1) both, pick-glow .95s ease-out both;
+  }
+  .sign.is-picked .sign-name, .item-card.is-picked .item-name {
+    transform-origin: 0 60%; animation: pick-stamp .5s cubic-bezier(.3, 1.5, .5, 1) both;
+  }
+  @keyframes pick-pop {
+    0% { transform: scale(.95); filter: brightness(1.45) saturate(1.25); }
+    35% { transform: scale(1.05); }
+    65% { transform: scale(.99); }
+    100% { transform: none; filter: none; }
+  }
+  @keyframes pick-glow {
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--burst, #F5A200) 65%, transparent); }
+    100% { box-shadow: 0 0 0 28px color-mix(in srgb, var(--burst, #F5A200) 0%, transparent); }
+  }
+  @keyframes pick-stamp {
+    0% { transform: scale(1.4); opacity: .2; }
+    100% { transform: none; opacity: 1; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; }
   }
@@ -804,6 +828,7 @@
 
     let busy = false;
     let rolling = null;      // 돌아가는 동안에만 { stop() }
+    let landing = false;     // 멈추기를 누른 뒤 느려지며 멈추는 동안
     let nextLockUntil = 0;   // 멈춘 직후 잘못 눌린 "다음"을 잠깐 막습니다.
     let choosing = false;    // 호선을 뽑은 뒤 "호선 목록"으로 다시 목록을 보는 중
 
@@ -824,38 +849,157 @@
     const offCats = key => new Set(state.offCat[key] || []);
     const enabledItems = key => { const off = offCats(key); return DECKS[key].filter(i => !off.has(i.cat)); };
 
-    // 뽑기를 누르면 후보가 계속 돌아가고, 한 번 더 누르면 그때 보이던 것으로 정해집니다.
+    /* ---------- 정해지는 순간의 효과 ---------- */
+
+    // 꽃가루: 화면 위에 잠깐 깔리는 캔버스에 색종이·점·작은 도넛(종점 표시)을 터뜨립니다.
+    const confetti = (() => {
+      let cv = null, ctx = null, parts = [], raf = 0, last = 0, W = 0, H = 0;
+      function setup() {
+        if (!cv) {
+          cv = document.createElement('canvas');
+          cv.className = 'burst';
+          cv.setAttribute('aria-hidden', 'true');
+          document.body.append(cv);
+          ctx = cv.getContext('2d');
+        }
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        W = window.innerWidth; H = window.innerHeight;
+        cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      // (x, y)에서 angle 방향(라디안, 위쪽이 -π/2)으로 spread만큼 퍼지게 n개
+      function fire(x, y, colors, n, angle, spread, power) {
+        if (!raf) setup();
+        for (let i = 0; i < n; i++) {
+          const a = angle + (Math.random() - .5) * spread;
+          const v = power * (.55 + Math.random() * .6);
+          const kind = i % 9 === 0 ? 'ring' : i % 4 === 0 ? 'dot' : 'paper';
+          parts.push({
+            x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, kind,
+            c: colors[Math.floor(Math.random() * colors.length)],
+            w: 7 + Math.random() * 6, h: 4 + Math.random() * 4,
+            rot: Math.random() * 6.3, vr: (Math.random() - .5) * 16, flip: Math.random() * 6.3,
+            life: 0, max: 1.3 + Math.random() * .7,
+          });
+        }
+        if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); }
+      }
+      function frame(now) {
+        const dt = Math.min(.04, (now - last) / 1000);
+        last = now;
+        ctx.clearRect(0, 0, W, H);
+        parts = parts.filter(p => (p.life += dt) < p.max && p.y < H + 40);
+        const drag = Math.pow(.18, dt);
+        for (const p of parts) {
+          p.vx *= drag;
+          p.vy = p.vy * drag + 1500 * dt; // 중력
+          p.x += p.vx * dt; p.y += p.vy * dt;
+          p.rot += p.vr * dt; p.flip += 9 * dt;
+          ctx.globalAlpha = Math.min(1, (p.max - p.life) / .4);
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rot);
+          if (p.kind === 'ring') {
+            ctx.beginPath(); ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
+            ctx.lineWidth = 3; ctx.strokeStyle = p.c; ctx.stroke();
+          } else if (p.kind === 'dot') {
+            ctx.beginPath(); ctx.arc(0, 0, 3.2, 0, Math.PI * 2);
+            ctx.fillStyle = p.c; ctx.fill();
+          } else {
+            ctx.scale(1, Math.cos(p.flip)); // 팔랑팔랑 뒤집히는 색종이
+            ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+          }
+          ctx.restore();
+        }
+        ctx.globalAlpha = 1;
+        if (parts.length) raf = requestAnimationFrame(frame);
+        else { raf = 0; ctx.clearRect(0, 0, W, H); }
+      }
+      return { fire };
+    })();
+
+    const PARTY = ['#00A84D', '#EF7C1C', '#00A5DE', '#996CAC', '#E6186C', '#F5A200', '#0052A4'];
+    const tint = (hex, k) => { // hex 색을 흰색 쪽으로 k만큼
+      const v = parseInt(hex.slice(1), 16);
+      const m = c => Math.round(c + (255 - c) * k);
+      return `rgb(${m(v >> 16)}, ${m((v >> 8) & 255)}, ${m(v & 255)})`;
+    };
+    // 짧은 진동 (안드로이드만. 아이폰 사파리는 진동을 지원하지 않아 아무 일도 없습니다.)
+    const buzz = pattern => {
+      try {
+        if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate(pattern);
+      } catch (e) { /* 진동 없음 */ }
+    };
+
+    // 정해진 카드: 쿵 하고 튀어 오르며 빛이 퍼지고, 카드 가운데와 아래 양쪽에서 꽃가루가 터집니다.
+    function celebrate(card) {
+      if (reduceMotion.matches || card.hidden) return;
+      const itemStep = card === els.item;
+      const line = itemStep ? null : curLine();
+      const colors = line
+        ? [line.color, line.color, line.color, tint(line.color, .45), '#F5A200', '#FFD54A']
+        : PARTY;
+      card.style.setProperty('--burst', line ? line.color : '#F5A200');
+      card.classList.remove('is-picked');
+      void card.offsetWidth; // 애니메이션을 처음부터 다시
+      card.classList.add('is-picked');
+      clearTimeout(card.pickedTimer);
+      card.pickedTimer = setTimeout(() => card.classList.remove('is-picked'), 1100);
+      const r = card.getBoundingClientRect();
+      const cx = r.left + r.width / 2, cy = r.top + Math.min(r.height * .45, 160);
+      confetti.fire(cx, cy, colors, 70, -Math.PI / 2, Math.PI * 1.15, 1150);
+      confetti.fire(r.left + 8, r.bottom - 8, colors, 28, -Math.PI / 2 + .55, .5, 1350);
+      confetti.fire(r.right - 8, r.bottom - 8, colors, 28, -Math.PI / 2 - .55, .5, 1350);
+      buzz([18, 40, 30]);
+    }
+
+    // 뽑기를 누르면 후보가 계속 돌아가고, 한 번 더 누르면 슬롯머신처럼 몇 칸 더 가며 느려지다가 멈춥니다.
+    // 마지막에 멈춘 것으로 정해지고, 정해지는 순간 효과가 터집니다.
     function startRoll(pool, show, commit) {
+      const itemStep = isItemStep(STEPS[state.step].key);
+      const card = itemStep ? els.item : els.sign;
       const finish = value => {
         rolling = null;
+        landing = false;
         busy = false;
         els.sign.classList.remove('is-rolling');
         els.item.classList.remove('is-rolling');
         commit(value);
+        celebrate(card);
       };
       choosing = false; // 뽑기를 시작하면 호선 목록은 닫습니다(후보가 하나라 바로 정해져도).
       if (pool.length < 2) { finish(pool[0]); return; } // 후보가 하나면 바로 정해집니다.
       const still = reduceMotion.matches; // 움직임 줄이기 설정이면 깜빡이지 않고 멈출 때 뽑습니다.
       let current = pickOne(pool);
       let timer = null;
-      const tick = () => {
+      const advance = () => {
         let v = pickOne(pool);
         if (v === current) v = pool[(pool.indexOf(v) + 1) % pool.length];
         current = v;
         show(current);
-        timer = setTimeout(tick, 70);
       };
+      const tick = () => { advance(); timer = setTimeout(tick, 70); };
+      // 멈추기를 누른 뒤 한 칸씩 넘어가는 간격(ms): 점점 길어지며 멈춥니다. 모두 합쳐 1초 남짓
+      const SLOW = [75, 100, 135, 185, 255, 340];
       busy = true;
       rolling = {
         stop() {
+          if (landing) return;
           clearTimeout(timer);
-          const value = still ? pickOne(pool) : current;
-          show(value);
-          finish(value);
+          if (still) { const value = pickOne(pool); show(value); finish(value); return; }
+          landing = true;
+          syncActions();
+          let k = 0;
+          const step = () => {
+            if (k === SLOW.length) { finish(current); return; }
+            advance();
+            card.animate([{ transform: 'translateY(-4px)' }, { transform: 'none' }], { duration: 140, easing: 'ease-out' });
+            buzz(6);
+            timer = setTimeout(step, SLOW[k++]);
+          };
+          step();
         },
       };
-      const itemStep = isItemStep(STEPS[state.step].key);
-      const card = itemStep ? els.item : els.sign;
       card.classList.add('is-rolling');
       const wasChoosing = !els.filter.hidden || !els.catFilter.hidden;
       els.filter.hidden = true;
@@ -1723,6 +1867,7 @@
       const chooser = chooserShown();
       els.draw.hidden = !isDrawStep(i) || (has && !spinning && !chooser);
       els.draw.textContent = spinning ? '멈추기' : '뽑기';
+      els.draw.setAttribute('aria-disabled', String(landing)); // 멈추는 중(느려지는 동안)에는 눌러도 그대로
       els.next.hidden = !has || spinning || chooser;
       els.next.textContent = i < DONE - 1 ? `다음: ${STEPS[i + 1].title}` : '코스 보기';
       // 이전: 결과 화면에서는 이 단계의 뽑기 전 화면(목록)으로, 뽑기 전 화면에서는 앞 단계로
