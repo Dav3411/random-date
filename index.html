@@ -88,9 +88,20 @@
   .bar-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
   .brand {
     display: inline-flex; align-items: center; gap: 8px;
-    padding: 4px 0; border: 0; background: none; color: var(--ink); cursor: pointer;
+    padding: 4px 0 11px; border: 0; background: none; color: var(--ink); cursor: pointer;
     font: 400 1.2rem/1 var(--font-display); letter-spacing: .02em;
+    position: relative;
+    --drop: calc(.5em + .6px); /* 선이 도넛에서 밑줄 높이까지 내려가는 거리 */
   }
+  /* 로고의 선: 도넛(종점)에서 오른쪽 아래 45도로 내려와 그대로 글자 밑줄이 됩니다. 노선도의 선처럼 한 줄로 이어집니다. */
+  .brand::before, .brand::after {
+    content: ""; position: absolute; height: 4px; border-radius: 2px; background: #00A84D; pointer-events: none;
+  }
+  .brand::before {
+    left: 11.4px; top: calc(.5em + 4.9px); /* 도넛 테두리의 오른쪽 아래(45도) 지점에서 시작 */
+    width: calc(var(--drop) * 1.4142); transform-origin: 0 50%; transform: rotate(45deg);
+  }
+  .brand::after { left: calc(10.4px + var(--drop)); right: 0; top: calc(1em + 5.5px); }
   /* 도넛 아이콘 (초록). 글자의 실제 높이(약 15px)에 맞추고, 글자 모양 가운데로 1px 올립니다. */
   .brand-dot {
     flex: none; width: 15px; height: 15px; border-radius: 50%;
@@ -397,14 +408,14 @@
           <p class="filter-count" id="filter-count"></p>
         </div>
         <div class="mini-actions">
-          <button id="all-on" class="btn-mini" type="button">전부 켜기</button>
-          <button id="all-off" class="btn-mini" type="button">전부 끄기</button>
+          <button id="all-on" class="btn-mini" type="button">전부 선택</button>
+          <button id="all-off" class="btn-mini" type="button">전부 해제</button>
         </div>
       </div>
       <div class="tabs" id="region-tabs" role="tablist" aria-label="지역"></div>
       <div class="filter-body" id="region-panel" role="tabpanel">
         <div class="map" id="line-map" hidden>
-          <svg class="map-lines" id="map-lines" role="img" aria-label="켜 둔 노선 지도"></svg>
+          <svg class="map-lines" id="map-lines" role="img" aria-label="선택한 노선 지도"></svg>
           <p class="map-credit">경계: <a href="https://sgis.kostat.go.kr/" target="_blank" rel="noopener">통계청 SGIS</a></p>
         </div>
         <div class="chips" id="line-chips"></div>
@@ -418,8 +429,8 @@
           <p class="filter-count" id="cat-count"></p>
         </div>
         <div class="mini-actions">
-          <button id="cat-all-on" class="btn-mini" type="button">전부 켜기</button>
-          <button id="cat-all-off" class="btn-mini" type="button">전부 끄기</button>
+          <button id="cat-all-on" class="btn-mini" type="button">전부 선택</button>
+          <button id="cat-all-off" class="btn-mini" type="button">전부 해제</button>
         </div>
       </div>
       <ul class="cats" id="cat-list"></ul>
@@ -813,7 +824,7 @@
         if (!on.length) {
           choosing = true;
           render();
-          setMsg('켜 둔 호선이 없습니다. "뽑을 호선 고르기"에서 하나 이상 켜 주세요.');
+          setMsg('선택한 호선이 없습니다. "뽑을 호선 고르기"에서 하나 이상 선택해 주세요.');
           return;
         }
         const others = on.filter(l => l.id !== state.line);
@@ -841,7 +852,7 @@
       if (!on.length) {
         choosing = true;
         render();
-        setMsg('켜 둔 종류가 없습니다. "뽑을 종류 고르기"에서 하나 이상 켜 주세요.');
+        setMsg('선택한 종류가 없습니다. "뽑을 종류 고르기"에서 하나 이상 선택해 주세요.');
         return;
       }
       // 지금 것을 빼고 돌리되, 그러면 하나만 남는 경우는 다 돌립니다.
@@ -940,7 +951,7 @@
     }
 
     function updateCount() {
-      els.filterCount.textContent = `${region().lines.length}개 중 ${enabledLines().length}개 켜짐`;
+      els.filterCount.textContent = `${region().lines.length}개 중 ${enabledLines().length}개 선택`;
     }
     /* ---------- 켜 둔 노선 지도 ---------- */
 
@@ -1087,7 +1098,7 @@
         nodes.push(el('circle', { cx: sx, cy: sy, r: ringR.toFixed(2), fill: bg, stroke: x.line.color, 'stroke-width': ringW.toFixed(2) }));
       }
       const names = all.filter(x => x.on).map(x => x.line.name);
-      svg.setAttribute('aria-label', names.length ? `켜 둔 노선 지도: ${names.join(', ')}` : '켜 둔 노선이 없습니다');
+      svg.setAttribute('aria-label', names.length ? `선택한 노선 지도: ${names.join(', ')}` : '선택한 노선이 없습니다');
       svg.replaceChildren(...nodes);
     }
     darkQuery.addEventListener('change', () => { if (!els.filter.hidden) renderMap(); }); // 지도 색이 바뀝니다.
@@ -1140,7 +1151,7 @@
       const off = offCats(key);
       const cats = catsOf(key);
       els.catTitle.textContent = `뽑을 ${STEPS[state.step].short} 종류`;
-      els.catCount.textContent = `${DECKS[key].length}개 중 ${enabledItems(key).length}개 켜짐`;
+      els.catCount.textContent = `${DECKS[key].length}개 중 ${enabledItems(key).length}개 선택`;
       els.catList.replaceChildren(...cats.map(cat => {
         const items = DECKS[key].filter(i => i.cat === cat);
         const li = make('li', 'cat-row');
@@ -1561,8 +1572,9 @@
       els.next.textContent = i < DONE - 1 ? `다음: ${STEPS[i + 1].title}` : '코스 보기';
       // 이전: 결과 화면에서는 이 단계의 뽑기 전 화면(목록)으로, 뽑기 전 화면에서는 앞 단계로
       const showingResult = has && !chooser;
-      els.back.hidden = i === 0 && !showingResult;
-      els.back.setAttribute('aria-disabled', String(spinning));
+      // 돌아가는 동안에는 이전 버튼을 보이지 않게 합니다. 자리는 그대로 둬서 "멈추기" 버튼이 움직이지 않습니다.
+      if (!spinning) els.back.hidden = i === 0 && !showingResult;
+      els.back.style.visibility = spinning ? 'hidden' : '';
       els.share.hidden = i !== DONE;
       els.restart.hidden = i !== DONE;
     }
@@ -1601,14 +1613,16 @@
       const kind = chooserKind();
       const chooser = !!kind;
       const showResult = drawStep && !!state[key] && !chooser;
-      els.sign.hidden = !(showResult && !isItemStep(key));
+      // 역 단계는 뽑기 전에도 역명판을 비워 둔 채(?)로 보여 줍니다.
+      els.sign.hidden = !((showResult && !isItemStep(key)) || kind === 'plain');
       els.item.hidden = !(showResult && isItemStep(key));
       els.course.hidden = key !== 'done';
       els.filter.hidden = kind !== 'line';
       els.catFilter.hidden = kind !== 'cat';
       els.copyText.hidden = true;
 
-      if (drawStep && !isItemStep(key)) paintSign(signFor(key));
+      if (kind === 'plain') paintSign({ line: curLine(), name: '?', empty: true, n: '?' });
+      else if (drawStep && !isItemStep(key)) paintSign(signFor(key));
       if (isItemStep(key)) paintItem(key, itemOf(key), false);
       if (kind === 'line') renderFilter();
       if (kind === 'cat') renderCats();
