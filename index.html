@@ -1321,7 +1321,8 @@
         cities: B.c.map(([name, color, lx, ly, w, s, e, n, rings]) => ({ ...place(name, lx, ly, w, s, e, n), color, rings: rings.map(ringPts) })),
         borders: B.b.map(i => arcs[i]),
         gu: B.g.map(i => arcs[i]),
-        guPlaces: B.d.map(([name, lx, ly, w, s, e, n]) => place(name, lx, ly, w, s, e, n)),
+        guPlaces: B.d.map(([name, lx, ly, w, s, e, n, rings]) => ({ ...place(name, lx, ly, w, s, e, n), rings: (rings || []).map(ringPts) })),
+        metro: B.m || '', // 구를 나눠 그린 광역시 (서울·부산·대구·광주·대전)
       });
     }
 
@@ -1373,15 +1374,15 @@
 
       const geo = geoOf(state.region);
       if (geo) {
-        // 서울 구 경계는 더 가늘게, 시 경계와 해안선은 얇게
+        // 광역시 구 경계는 더 가늘게, 시 경계와 해안선은 얇게
         nodes.push(el('path', { d: dOf(geo.gu), fill: 'none', stroke: edge, 'stroke-width': 0.5, 'stroke-linejoin': 'round' }));
         nodes.push(el('path', { d: dOf(geo.borders), fill: 'none', stroke: edge, 'stroke-width': 0.8, 'stroke-linejoin': 'round' }));
 
         // 이름은 흐리게, 노선보다 뒤에. 칸에 들어가고 서로 겹치지 않는 것만 적습니다.
         const placed = [];
         const labels = [];
-        const tryLabel = (pl, size, cls) => {
-          const [x, y] = toScreen(pl.at);
+        const tryLabel = (pl, size, cls, at) => {
+          const [x, y] = at || toScreen(pl.at);
           const [x0, y0] = toScreen(pl.min), [x1, y1] = toScreen(pl.max);
           const tw = pl.name.length * size * 0.92 + 2, th = size * 1.1;
           if (x1 - x0 < tw || y1 - y0 < th * 1.3) return false;
@@ -1396,9 +1397,40 @@
         };
         const byArea = list => [...list].sort((a, b) =>
           (b.max[0] - b.min[0]) * (b.max[1] - b.min[1]) - (a.max[0] - a.min[0]) * (a.max[1] - a.min[1]));
-        const guCount = byArea(geo.guPlaces).filter(pl => tryLabel(pl, 10, 'map-label is-gu')).length;
+        // 구 이름: 한가운데 자리가 지도 밖이거나 다른 이름과 겹치면, 그 구 안에서 지도에 보이는 다른 자리를 찾습니다.
+        // (지도를 크게 확대한 광주·대전처럼 구의 일부만 보일 때)
+        const inRings = (px, py, rings) => {
+          let inside = false;
+          for (const ring of rings) for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+            const [xi, yi] = ring[i], [xj, yj] = ring[j];
+            if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+          }
+          return inside;
+        };
+        const tryGuLabel = (pl, size, cls) => {
+          if (tryLabel(pl, size, cls)) return true;
+          if (!pl.rings.length) return false;
+          const rings = pl.rings.map(r => r.map(toScreen));
+          const [x0, y0] = toScreen(pl.min), [x1, y1] = toScreen(pl.max);
+          const tw = pl.name.length * size * 0.92 + 2, th = size * 1.1;
+          const L = Math.max(x0, 4 + tw / 2), R = Math.min(x1, W - 4 - tw / 2);
+          const T = Math.max(y0, 4 + th / 2), Bt = Math.min(y1, H - 4 - th / 2);
+          if (R <= L || Bt <= T) return false;
+          const cands = [];
+          for (let i = 0; i <= 8; i++) for (let j = 0; j <= 8; j++) {
+            const x = L + (R - L) * i / 8, y = T + (Bt - T) * j / 8;
+            const corners = [[x, y], [x - tw / 2, y - th / 2], [x + tw / 2, y - th / 2], [x - tw / 2, y + th / 2], [x + tw / 2, y + th / 2]];
+            if (corners.every(([px, py]) => inRings(px, py, rings))) cands.push([x, y]);
+          }
+          if (!cands.length) return false;
+          // 보이는 부분의 가운데에 가까운 자리부터
+          const mx = cands.reduce((s, c) => s + c[0], 0) / cands.length, my = cands.reduce((s, c) => s + c[1], 0) / cands.length;
+          cands.sort((a, b) => Math.hypot(a[0] - mx, a[1] - my) - Math.hypot(b[0] - mx, b[1] - my));
+          return cands.slice(0, 12).some(c => tryLabel(pl, size, cls, c));
+        };
+        const guCount = byArea(geo.guPlaces).filter(pl => tryGuLabel(pl, 10, 'map-label is-gu')).length;
         for (const c of byArea(geo.cities)) {
-          if (c.name === '서울' && guCount >= 3) continue; // 구 이름이 보이면 "서울"은 생략
+          if (c.name === geo.metro && guCount >= 3) continue; // 구 이름이 보이면 "서울"·"부산" 같은 시 이름은 생략
           tryLabel(c, 13, 'map-label');
         }
         nodes.push(...labels);
