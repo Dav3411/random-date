@@ -11,7 +11,7 @@
 <meta property="og:site_name" content="랜덤 역 데이트">
 <meta property="og:title" content="랜덤 역 데이트">
 <meta property="og:description" content="오늘 데이트는 뽑기가 정했다. 눌러서 확인해.">
-<meta property="og:image" content="https://dav3411.github.io/random-date/og.png">
+<meta property="og:image" content="https://dav3411.github.io/random-date/og.png?v=2">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:locale" content="ko_KR">
@@ -99,20 +99,25 @@
   .bar-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
   .brand {
     display: inline-flex; align-items: center; gap: 8px;
-    padding: 4px 0 11px; border: 0; background: none; color: var(--ink); cursor: pointer;
+    padding: 4px 0 7px; border: 0; background: none; color: var(--ink); cursor: pointer;
     font: 400 1.2rem/1 var(--font-display); letter-spacing: .02em;
     position: relative;
-    --drop: calc(.5em + .6px); /* 선이 도넛에서 밑줄 높이까지 내려가는 거리 */
+    --lw: 3px;                   /* 선 굵기 */
+    --drop: calc(.5em - 2.5px);  /* 선이 도넛에서 밑줄 높이까지 내려가는 거리 */
   }
-  /* 로고의 선: 도넛(종점)에서 오른쪽 아래 45도로 내려와 그대로 글자 밑줄이 됩니다. 노선도의 선처럼 한 줄로 이어집니다. */
-  .brand::before, .brand::after {
-    content: ""; position: absolute; height: 4px; border-radius: 2px; background: #00A84D; pointer-events: none;
-  }
+  /* 로고의 선: 도넛(종점)에서 오른쪽 아래 45도로 내려와 그대로 글자 밑줄이 됩니다. 끝은 각지게 자릅니다.
+     대각선은 위아래가 수평으로 잘린 평행사변형이라, 꺾이는 모서리가 밑줄과 빈틈없이 한 줄로 이어집니다. */
+  .brand::before, .brand::after { content: ""; position: absolute; background: #00A84D; pointer-events: none; }
   .brand::before {
-    left: 11.4px; top: calc(.5em + 4.9px); /* 도넛 테두리의 오른쪽 아래(45도) 지점에서 시작 */
-    width: calc(var(--drop) * 1.4142); transform-origin: 0 50%; transform: rotate(45deg);
+    /* 도넛 테두리의 오른쪽 아래(45도) 지점에서 시작해 밑줄 아랫변까지 */
+    left: calc(11.4px - var(--lw) * .7071); top: calc(.5em + 6.9px);
+    width: calc(var(--lw) * 1.4142); height: calc(var(--drop) + var(--lw) / 2);
+    transform-origin: 0 0; transform: skewX(45deg);
   }
-  .brand::after { left: calc(10.4px + var(--drop)); right: 0; top: calc(1em + 5.5px); }
+  .brand::after {
+    left: calc(11.4px - var(--lw) * .7071 + var(--drop) + var(--lw) / 2 - .3px); right: 0;
+    top: calc(1em + 4.4px - var(--lw) / 2); height: var(--lw);
+  }
   /* 도넛 아이콘 (초록). 글자의 실제 높이(약 15px)에 맞추고, 글자 모양 가운데로 1px 올립니다. */
   .brand-dot {
     flex: none; width: 15px; height: 15px; border-radius: 50%;
@@ -583,10 +588,30 @@
       catFilter: $('cat-filter'), catTitle: $('cat-title'), catCount: $('cat-count'), catList: $('cat-list'),
     };
 
-    // 휴대폰에서 map.naver.com 주소는 매번 '네이버지도 앱 설치·열기' 안내 페이지로 넘겨집니다.
-    // 그래서 휴대폰에서는 검색 결과가 바로 나오는 모바일 지도 주소를 씁니다. (앱은 그 화면의 '앱 열기'로)
-    const onPhone = /Android|iPhone|iPod|Mobile/i.test(navigator.userAgent);
-    const mapUrl = q => (onPhone ? 'https://m.map.naver.com/search?query=' : 'https://map.naver.com/p/search/') + encodeURIComponent(q);
+    // 네이버 지도 링크. 휴대폰에서는 네이버 지도 앱이 바로 뜨도록, 네이버 모바일 웹의 '앱 열기' 버튼과 같은 주소를 씁니다.
+    //  - 아이폰: 유니버설 링크(app.map.naver.com/launchApp/…). 앱이 있으면 앱이 열리고, 없으면 네이버의 앱 설치 안내가 열립니다.
+    //  - 안드로이드: 앱을 부르는 intent 주소. 앱이 없으면 모바일 웹 검색 결과로 넘어갑니다.
+    //  - 그 밖(컴퓨터 등): 웹 지도.  (map.naver.com/p/search 주소는 휴대폰에서 매번 앱 안내 페이지를 거쳐서 쓰지 않습니다.)
+    // appname은 네이버 안내에 따라 부르는 쪽(이 사이트)의 주소를 넣습니다.
+    const UA = navigator.userAgent;
+    const mapApp = /iPhone|iPod/.test(UA) ? 'ios' : /Android/i.test(UA) ? 'android' : null;
+    const mapUrl = q => {
+      const query = encodeURIComponent(q);
+      const from = encodeURIComponent(location.host + location.pathname);
+      const web = 'https://m.map.naver.com/search?query=' + query;
+      if (mapApp === 'ios') return `https://app.map.naver.com/launchApp/search?query=${query}&appname=${from}`;
+      if (mapApp === 'android') {
+        return `intent://search?query=${query}&appname=${from}#Intent;scheme=nmap;action=android.intent.action.VIEW;` +
+          `category=android.intent.category.BROWSABLE;package=com.nhn.android.nmap;S.browser_fallback_url=${encodeURIComponent(web)};end`;
+      }
+      return /Mobile/i.test(UA) ? web : 'https://map.naver.com/p/search/' + query;
+    };
+    // 앱을 여는 링크는 새 탭을 띄우지 않습니다(빈 탭이 남지 않게). 웹 지도는 새 탭으로.
+    const setMapHref = (a, q) => {
+      a.href = mapUrl(q);
+      if (mapApp) a.removeAttribute('target'); else a.target = '_blank';
+      a.rel = 'noopener';
+    };
     const countOf = s => `${s.loop ? s.origin : s.origin + '에서'} ${s.n}번째`;
     const setMsg = text => { els.msg.textContent = text || ''; els.msg.hidden = !text; };
     const announce = text => { els.live.textContent = text; };
@@ -607,9 +632,7 @@
     };
     const mapLink = (text, q) => {
       const a = make('a', null, text + ' ↗');
-      a.href = mapUrl(q);
-      a.target = '_blank';
-      a.rel = 'noopener';
+      setMapHref(a, q);
       return a;
     };
 
@@ -625,7 +648,7 @@
     function setCardLink(a, query, label) {
       a.hidden = !query;
       if (query) {
-        a.href = mapUrl(query);
+        setMapHref(a, query);
         a.setAttribute('aria-label', label || query);
       } else {
         a.removeAttribute('href');
