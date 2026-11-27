@@ -11,7 +11,8 @@ const TRUNK5 = '방화 개화산 김포공항 송정 마곡 발산 우장산 화
 // short: 숫자면 동그라미 안에 표시, 아니면 호선 고르기 버튼의 이름으로만 씁니다.
 // font: 역명판 글꼴. 지역 기본값을 두고, 운영사가 다른 노선만 따로 적습니다.
 //   seoul 서울남산체(서울교통공사 등) · korail 코레일체(한국철도공사, 부산교통공사도 사용)
-//   gwangju 빛고을광주체 · heavy 유료 글꼴(HY견고딕, HY헤드라인M, 지하철체)을 쓰는 곳에 비슷한 무료 글꼴
+//   gwangju 빛고을광주체 · hyGyeon / hyHeadline: 유료 글꼴 HY견고딕(인천) / HY헤드라인M(대전, 대구는 지하철체)
+//   대신 같은 한양정보통신이 무료로 공개한 Gothic A1
 // optional: 처음에는 꺼 두는 노선. 수도권은 1~9호선과 수인분당선, 신분당선, 경의중앙선만
 // 기본으로 켜고, 나머지는 "뽑을 호선 고르기"에서 직접 켜야 뽑힙니다.
 const REGIONS = [
@@ -49,10 +50,10 @@ const REGIONS = [
     { id: 's9', name: '9호선', short: '9', color: '#BDB092', on: K, routes: [
       { stations: S('개화 김포공항 공항시장 신방화 마곡나루 양천향교 가양 증미 등촌 염창 신목동 선유도 당산 국회의사당 여의도 샛강 노량진 노들 흑석 동작 구반포 신반포 고속터미널 사평 신논현 언주 선정릉 삼성중앙 봉은사 종합운동장 삼전 석촌고분 석촌 송파나루 한성백제 올림픽공원 둔촌오륜 중앙보훈병원') },
     ] },
-    { id: 'i1', name: '인천 1호선', short: '인천1', font: 'heavy', color: '#759CCE', on: K, routes: [
+    { id: 'i1', name: '인천 1호선', short: '인천1', font: 'hyGyeon', color: '#759CCE', on: K, routes: [
       { stations: S('검단호수공원 신검단중앙 아라 계양 귤현 박촌 임학 계산 경인교대입구 작전 갈산 부평구청 부평시장 부평 동수 부평삼거리 간석오거리 인천시청 예술회관 인천터미널 문학경기장 선학 신연수 원인재 동춘 동막 캠퍼스타운 테크노파크 지식정보단지 인천대입구 센트럴파크 국제업무지구 송도달빛축제공원') },
     ] },
-    { id: 'i2', name: '인천 2호선', short: '인천2', font: 'heavy', color: '#F5A251', on: K, routes: [
+    { id: 'i2', name: '인천 2호선', short: '인천2', font: 'hyGyeon', color: '#F5A251', on: K, routes: [
       { stations: S('검단오류 왕길 검단사거리 마전 완정 독정 검암 검바위 아시아드경기장 서해구청 가정 가정중앙시장 석남 서부여성회관 인천가좌 가재울 주안국가산단 주안 시민공원 석바위시장 인천시청 석천사거리 모래내시장 만수 남동구청 인천대공원 운연') },
     ] },
     { id: 'sb', name: '수인분당선', short: '수인분당', font: 'korail', color: '#F5A200', on: K, routes: [
@@ -119,7 +120,7 @@ const REGIONS = [
     ] },
   ] },
 
-  { id: 'daegu', name: '대구', sub: '경산·구미 연결', font: 'heavy', lines: [
+  { id: 'daegu', name: '대구', sub: '경산·구미 연결', font: 'hyHeadline', lines: [
     { id: 'd1', name: '1호선', short: '1', color: '#D93F5C', on: W, routes: [
       { stations: S('설화명곡 화원 대곡 진천 월배 상인 월촌 송현 서부정류장 대명 안지랑 현충로 영대병원 교대 명덕 반월당 중앙로 대구역 칠성시장 신천 동대구 동구청 아양교 동촌 해안 방촌 용계 율하 신기 반야월 각산 안심 대구한의대병원 부호 하양') },
     ] },
@@ -140,7 +141,7 @@ const REGIONS = [
     ] },
   ] },
 
-  { id: 'daejeon', name: '대전', sub: '도시철도', font: 'heavy', lines: [
+  { id: 'daejeon', name: '대전', sub: '도시철도', font: 'hyHeadline', lines: [
     { id: 't1', name: '1호선', short: '1', color: '#007448', on: W, routes: [
       { stations: S('판암 신흥 대동 대전역 중앙로 중구청 서대전네거리 오룡 용문 탄방 시청 정부청사 갈마 월평 갑천 유성온천 구암 현충원 월드컵경기장 노은 지족 반석') },
     ] },

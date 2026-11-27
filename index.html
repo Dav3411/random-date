@@ -8,7 +8,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='23' fill='%23fff' stroke='%2300A84D' stroke-width='12'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=Gothic+A1:wght@800;900&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <style>
   /* 역명판 글꼴: 실제 지하철 역명판에 쓰는 글꼴 (쓰는 글자가 처음 나올 때만 내려받습니다)
@@ -469,7 +469,9 @@
       seoul: ["'SeoulNamsanSign', 'Do Hyeon', sans-serif", 800],      // 서울남산체 EB
       korail: ["'KorailSign', 'Do Hyeon', sans-serif", 400],          // 코레일체
       gwangju: ["'BitgoeulSign', 'Do Hyeon', sans-serif", 700],       // 빛고을광주체
-      heavy: ["'Black Han Sans', 'Do Hyeon', sans-serif", 400],       // 유료 글꼴 대신 비슷한 무료 글꼴
+      // HY견고딕·HY헤드라인M(유료) 대신, 같은 한양정보통신이 무료로 공개한 Gothic A1
+      hyGyeon: ["'Gothic A1', 'Do Hyeon', sans-serif", 900],
+      hyHeadline: ["'Gothic A1', 'Do Hyeon', sans-serif", 800],
     };
     function applySignFont(line) {
       const key = (line && line.font) || region().font;
