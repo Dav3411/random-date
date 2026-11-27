@@ -123,7 +123,7 @@
 
   /* station sign: every draw result is shown on it */
   .sign { background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; padding-bottom: 20px; }
-  .sign-top { display: flex; align-items: center; gap: 14px; padding: 22px 18px 26px; min-height: 124px; }
+  .sign-top { display: flex; align-items: center; gap: 14px; padding: 22px 18px 26px; min-height: clamp(124px, 30vw, 148px); }
   .badge {
     flex: none; width: 52px; height: 52px; border-radius: 50%;
     display: grid; place-items: center;
@@ -420,7 +420,7 @@
       }
       els.name.textContent = v.name;
       els.name.classList.toggle('is-empty', !!v.empty);
-      els.name.classList.toggle('is-long', !v.empty && v.name.length >= 8);
+      els.name.classList.toggle('is-long', !v.empty && v.name.length >= 7);
       els.order.hidden = v.n == null;
       els.n.textContent = v.n == null ? '' : String(v.n);
       els.left.textContent = v.left || '';
@@ -434,38 +434,59 @@
     /* ---------- 뽑기: 한 번에 하나 ---------- */
 
     let busy = false;
-    let rollId = 0;
-    function roll(pool, final, ms, show, done) {
-      const id = ++rollId;
-      const finish = () => {
+    let rolling = null;      // 돌아가는 동안에만 { stop() }
+    let nextLockUntil = 0;   // 멈춘 직후 잘못 눌린 "다음"을 잠깐 막습니다.
+
+    // 뽑기를 누르면 후보가 계속 돌아가고, 한 번 더 누르면 그때 보이던 것으로 정해집니다.
+    function startRoll(pool, show, commit) {
+      const finish = value => {
+        rolling = null;
         busy = false;
         els.sign.classList.remove('is-rolling');
-        show(final);
-        done();
+        commit(value);
+      };
+      if (pool.length < 2) { finish(pool[0]); return; } // 후보가 하나면 바로 정해집니다.
+      const still = reduceMotion.matches; // 움직임 줄이기 설정이면 깜빡이지 않고 멈출 때 뽑습니다.
+      let current = pickOne(pool);
+      let timer = null;
+      const tick = () => {
+        let v = pickOne(pool);
+        if (v === current) v = pool[(pool.indexOf(v) + 1) % pool.length];
+        current = v;
+        show(current);
+        timer = setTimeout(tick, 70);
       };
       busy = true;
-      syncActions();
-      if (!ms || reduceMotion.matches || pool.length < 2) { finish(); return; }
+      rolling = {
+        stop() {
+          clearTimeout(timer);
+          const value = still ? pickOne(pool) : current;
+          show(value);
+          finish(value);
+        },
+      };
       els.sign.classList.add('is-rolling');
-      const end = performance.now() + ms;
-      (function tick() {
-        if (id !== rollId) return;
-        if (performance.now() >= end) { finish(); return; }
-        show(pickOne(pool));
-        setTimeout(tick, 70);
-      })();
+      els.note.hidden = true;
+      if (still) paintSign({ name: '뽑는 중', empty: true }); else tick();
+      setMsg('멈추기를 누르면 지금 보이는 것으로 정해집니다.');
+      syncActions();
+      els.draw.focus({ preventScroll: true });
     }
 
     function draw() {
-      if (busy || !isDrawStep(state.step)) return;
+      if (!isDrawStep(state.step)) return;
+      if (rolling) { rolling.stop(); return; }
+      if (busy) return;
       const step = STEPS[state.step];
       const key = step.key;
       setMsg('');
-      const after = text => () => {
-        const hadFocus = [els.draw, els.redraw, document.body].includes(document.activeElement);
+      const finishDraw = text => {
+        save();
+        nextLockUntil = performance.now() + 600;
+        setMsg('');
         render();
         announce(`${step.short}: ${text}`);
-        if (hadFocus) els.next.focus({ preventScroll: true });
+        els.next.focus({ preventScroll: true });
       };
 
       if (key === 'line') {
@@ -480,30 +501,30 @@
           setMsg('켜 둔 호선이 하나뿐이라 다시 뽑아도 같습니다.');
           return;
         }
-        const pool = others.length ? others : on;
-        const pick = pickOne(pool);
-        if (pick.id !== state.line) state.station = null;
-        state.line = pick.id;
-        save();
-        roll(pool, pick, 800, l => paintSign(lineView(l)), after(pick.name));
+        startRoll(others.length ? others : on, l => paintSign(lineView(l)), pick => {
+          if (pick.id !== state.line) state.station = null;
+          state.line = pick.id;
+          finishDraw(pick.name);
+        });
         return;
       }
 
       if (key === 'station') {
         const line = curLine();
-        const skip = state.station ? new Set([state.station.name]) : null;
-        const pick = drawStation(line, skip) || drawStation(line);
-        state.station = pick;
-        save();
-        roll(stationChoices(line), pick, 900, s => paintSign(stationView(line, s)), after(stationLabel(pick.name)));
+        const current = state.station && state.station.name;
+        const pool = stationChoices(line).filter(c => c.name !== current);
+        startRoll(pool, s => paintSign(stationView(line, s)), pick => {
+          state.station = pick;
+          finishDraw(stationLabel(pick.name));
+        });
         return;
       }
 
       const pool = DECKS[key].filter(i => i.label !== state[key]);
-      const pick = pickOne(pool);
-      state[key] = pick.label;
-      save();
-      roll(pool, pick, 700, i => paintSign(itemView(i)), after(pick.label));
+      startRoll(pool, i => paintSign(itemView(i)), pick => {
+        state[key] = pick.label;
+        finishDraw(pick.label);
+      });
     }
 
     function go(i) {
@@ -619,6 +640,7 @@
         b.setAttribute('aria-label', l.name);
         b.setAttribute('aria-pressed', String(!off.has(l.id)));
         b.addEventListener('click', () => {
+          if (busy) return;
           const now = offSet();
           if (now.has(l.id)) now.delete(l.id); else now.add(l.id);
           state.off[state.region] = [...now];
@@ -632,12 +654,14 @@
       filterSummary();
     }
     const setAllLines = on => {
+      if (busy) return;
       state.off[state.region] = on ? [] : region().lines.map(l => l.id);
       save();
       setMsg('');
       renderFilter();
     };
     els.allDefault.addEventListener('click', () => {
+      if (busy) return;
       delete state.off[state.region];
       save();
       setMsg('');
@@ -671,16 +695,17 @@
     }
 
     function syncActions() {
-      const lock = String(busy);
-      for (const b of [els.draw, els.next, els.back, els.redraw]) b.setAttribute('aria-disabled', lock);
-      if (busy) return; // 뽑는 동안에는 버튼 구성을 바꾸지 않습니다.
       const i = state.step;
+      const spinning = !!rolling;
       const has = isDrawStep(i) && !!state[STEPS[i].key];
-      els.draw.hidden = !isDrawStep(i) || has;
-      els.next.hidden = !has;
+      // 돌아가는 동안에는 멈추기 버튼 하나만 누를 수 있습니다.
+      els.draw.hidden = !isDrawStep(i) || (has && !spinning);
+      els.draw.textContent = spinning ? '멈추기' : '뽑기';
+      els.next.hidden = !has || spinning;
       els.next.textContent = i < DONE - 1 ? `다음: ${STEPS[i + 1].title}` : '코스 보기';
-      els.redraw.hidden = !has;
+      els.redraw.hidden = !has || spinning;
       els.back.hidden = i === 0;
+      els.back.setAttribute('aria-disabled', String(spinning));
       els.copy.hidden = i !== DONE;
       els.restart.hidden = i !== DONE;
     }
@@ -717,7 +742,10 @@
 
     els.draw.addEventListener('click', draw);
     els.redraw.addEventListener('click', draw);
-    els.next.addEventListener('click', () => go(state.step + 1));
+    els.next.addEventListener('click', () => {
+      if (performance.now() < nextLockUntil) return;
+      go(state.step + 1);
+    });
     els.back.addEventListener('click', () => go(state.step - 1));
 
     let toastTimer;
