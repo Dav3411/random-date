@@ -339,11 +339,6 @@
   }
   .cat-row.is-off .cat { background: transparent; border-color: var(--rule); color: var(--muted); }
   /* 역 근처에 그 종류가 하나도 없으면 점선 테두리로 흐리게 (골라도 뽑히지 않음) */
-  .cat-row.is-none .cat { opacity: .45; border-style: dashed; }
-  .cat-near { margin: -4px 0 0; font-size: .82rem; color: var(--muted); }
-  .cat-near b { color: var(--ink); font-weight: 600; }
-  .cat-credit { margin: 0; font-size: .66rem; color: var(--muted); text-align: right; }
-  .cat-credit a { color: inherit; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip {
     min-width: 42px; height: 42px; padding: 0 13px; border-radius: 21px;
@@ -487,9 +482,7 @@
           <button id="cat-all-off" class="btn-mini" type="button">전부 해제</button>
         </div>
       </div>
-      <p class="cat-near" id="cat-near" hidden></p>
       <ul class="cats" id="cat-list"></ul>
-      <p class="cat-credit" id="cat-credit" hidden>가게 정보: <a href="https://www.data.go.kr/data/15083033/fileData.do" target="_blank" rel="noopener">소상공인시장진흥공단 상가(상권)정보</a></p>
     </section>
 
     <figure class="item-card" id="item-card" hidden>
@@ -627,7 +620,6 @@
       tabs: $('region-tabs'), panel: $('region-panel'),
       actions: $('actions'), live: $('live'),
       catFilter: $('cat-filter'), catTitle: $('cat-title'), catCount: $('cat-count'), catList: $('cat-list'),
-      catNear: $('cat-near'), catCredit: $('cat-credit'),
     };
 
     // 네이버 지도 링크. 휴대폰에서는 네이버 지도 앱이 바로 뜨도록, 네이버 모바일 웹의 '앱 열기' 버튼과 같은 주소를 씁니다.
@@ -871,52 +863,17 @@
     const offCats = key => new Set(state.offCat[key] || []);
     const enabledItems = key => { const off = offCats(key); return DECKS[key].filter(i => !off.has(i.label)); };
 
-    // 역 근처에 있는 것만: near.js(공공 상가정보로 역마다 미리 계산한 표)를 봅니다.
-    // 근처(radius) 후보가 NEAR_MIN개보다 적으면 넓은 반경(wide)으로, 그래도 적으면 전체에서 뽑습니다.
-    // near.js가 없거나 그 역 자료가 없으면 지금처럼 전체에서 뽑습니다.
-    const NEAR_MIN = 3;
-    const nearReady = () => typeof NEAR !== 'undefined' && !!NEAR && !!NEAR.st;
-    const bitsCache = new Map();
-    // 역마다의 값: 같은 지역에 이름이 같은 역이 따로 있으면 '노선:역' 키로 적혀 있습니다.
-    const stationEntry = (tbl, line, name) => (tbl && ((line && tbl[line.id + ':' + name]) || tbl[name])) || null;
-    function stationBits(which, regionId = state.region, line = curLine(), name = state.station && state.station.name) {
-      if (!nearReady() || !name) return null;
-      const b64 = stationEntry((NEAR[which] || {})[regionId], line, name);
-      if (!b64) return null;
-      if (!bitsCache.has(b64)) {
-        const bin = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
-        bitsCache.set(b64, Uint8Array.from(bin, c => c.charCodeAt(0)));
-      }
-      return bitsCache.get(b64);
-    }
-    const bitOn = (bytes, bit) => ((bytes[bit >> 3] >> (bit & 7)) & 1) === 1;
-    function isNear(key, item, bytes) {
-      const i = NEAR.items[key] ? NEAR.items[key].indexOf(item.label) : -1;
-      if (i < 0) return true; // 표를 만든 뒤에 새로 넣은 카테고리
-      const before = { food: 0, dessert: NEAR.items.food.length, play: NEAR.items.food.length + NEAR.items.dessert.length }[key];
-      return bitOn(bytes, before + i);
-    }
-    // 지도 검색어의 역 부분. 서울 밖이거나 다른 지역에 같은 이름이 있는 역은 '대전 시청역'처럼 도시 이름을 붙입니다.
+    // 지도 검색어의 역 부분. 서울 밖이거나 다른 지역에 같은 이름이 있는 역은 '대전 시청역'처럼 도시 이름을 붙입니다(area.js).
+    // 같은 지역에 이름이 같은 역이 따로 있으면 '노선:역' 키로 적혀 있습니다.
     function placeQuery(regionId, line, name) {
-      const city = nearReady() && NEAR.ar ? stationEntry(NEAR.ar[regionId], line, name) : null;
+      const tbl = typeof AREA !== 'undefined' && AREA ? AREA[regionId] : null;
+      const city = (tbl && ((line && tbl[line.id + ':' + name]) || tbl[name])) || null;
       return (city ? city + ' ' : '') + stationQuery(name);
     }
     // 카테고리 지도 검색어: '마들역 베이커리', '대전 시청역 고깃집'
     function itemQuery(item, regionId = state.region, line = curLine(), name = state.station && state.station.name) {
       return (name ? placeQuery(regionId, line, name) + ' ' : '') + item.q;
     }
-    // { pool: 뽑을 후보, scope: 'near' | 'wide' | 'all', known: 근처 자료가 있는지 }
-    function nearFilter(key, items) {
-      const near = stationBits('st');
-      if (!near) return { pool: items, scope: 'all', known: false };
-      const a = items.filter(i => isNear(key, i, near));
-      if (a.length >= NEAR_MIN) return { pool: a, scope: 'near', known: true };
-      const wide = stationBits('wd');
-      const b = wide ? items.filter(i => isNear(key, i, wide)) : [];
-      if (b.length >= NEAR_MIN) return { pool: b, scope: 'wide', known: true };
-      return { pool: items, scope: 'all', known: true };
-    }
-    const meters = m => (m >= 1000 ? `${m / 1000}km` : `${m}m`);
 
     /* ---------- 이름 릴: 슬롯머신처럼 새 이름이 아래에서 밀려 올라옵니다 ---------- */
 
@@ -1234,10 +1191,9 @@
         setMsg('선택한 종류가 없습니다. "뽑을 종류 고르기"에서 하나 이상 선택해 주세요.');
         return;
       }
-      // 역 근처에 있는 것만 돌립니다. 지금 것을 빼고 돌리되, 그러면 하나만 남는 경우는 다 돌립니다.
-      const near = nearFilter(key, on).pool;
-      const others = near.filter(i => i.label !== state[key]);
-      const pool = others.length >= 2 ? others : near;
+      // 지금 것을 빼고 돌리되, 그러면 하나만 남는 경우는 다 돌립니다.
+      const others = on.filter(i => i.label !== state[key]);
+      const pool = others.length >= 2 ? others : on;
       preloadThumbs(key, pool);
       startRoll(pool, i => paintItem(key, i, !!rolling), pick => {
         state[key] = pick.label;
@@ -1561,30 +1517,16 @@
 
     /* ---------- 밥·디저트·놀거리 종류 고르기 ---------- */
 
-    // 카테고리마다 켜고 끌 수 있습니다. 역 근처에 없는 카테고리는 흐리게.
+    // 카테고리마다 켜고 끌 수 있습니다.
     function renderCats() {
       const key = STEPS[state.step].key;
       const off = offCats(key);
       const cats = catsOf(key);
       els.catTitle.textContent = `뽑을 ${STEPS[state.step].short} 종류`;
       els.catCount.textContent = `${cats.length}종류 중 ${cats.filter(c => !off.has(c)).length}종류 선택`;
-      // 역 근처 안내: 선택한 것 중 근처에 있는 몇 개에서 뽑는지
-      const nf = nearFilter(key, enabledItems(key));
-      const nearAll = nf.known ? new Set(nearFilter(key, DECKS[key]).pool.map(i => i.label)) : null;
-      const where = state.station ? stationLabel(state.station.name) : '역';
-      els.catNear.hidden = !nf.known;
-      els.catCredit.hidden = !nf.known;
-      if (nf.known) {
-        const n = make('b', null, `${nf.pool.length}개`);
-        if (nf.scope === 'near') els.catNear.replaceChildren(`${where} ${meters(NEAR.radius)} 안에 있는 `, n, '에서 뽑아요');
-        else if (nf.scope === 'wide') els.catNear.replaceChildren(`${where} 바로 근처엔 적어서 ${meters(NEAR.wide)} 안에 있는 `, n, '에서 뽑아요');
-        else els.catNear.replaceChildren(`${where} 근처에 마땅한 곳이 적어서 선택한 `, n, ' 전부에서 뽑아요');
-      }
       els.catList.replaceChildren(...cats.map(cat => {
-        const none = !!nearAll && !nearAll.has(cat);
-        const li = make('li', 'cat-row' + (off.has(cat) ? ' is-off' : '') + (none ? ' is-none' : ''));
+        const li = make('li', 'cat-row' + (off.has(cat) ? ' is-off' : ''));
         const b = make('button', 'cat', cat);
-        if (none) b.title = `${where} 근처에 없어요`;
         b.type = 'button';
         b.setAttribute('aria-pressed', String(!off.has(cat)));
         b.addEventListener('click', () => {
@@ -1646,12 +1588,13 @@
     // 공유 링크: 받은 사람도 같은 코스 화면으로 열립니다.
     // 주소는 메시지에 그대로 보이므로 짧게: ?k=호선-역-밥-디저트-놀거리 (호선은 ID, 역은 순번, 나머지는 카테고리 번호)
     // 카테고리 번호(sid)는 data.js의 SHARE_IDS에서 한 번 정하면 바뀌지 않아서, 목록을 고쳐도 예전 링크가 그대로 열립니다.
-    // 메뉴별로 뽑던 때의 링크(?c=…, 번호는 그때의 메뉴 번호)는 그 메뉴가 든 카테고리로 엽니다.
-    const bySid = (key, sid) => DECKS[key].find(i => i.sid === sid);
-    const byMenuSid = (key, sid) => {
-      const cat = categoryOf(key, LEGACY[key].ids.split(',')[sid]);
+    // 메뉴별로 뽑던 때의 링크(?c=…, 번호는 그때의 메뉴 번호)와 지금은 뺀 카테고리는 그걸 합친 카테고리로 엽니다.
+    const byIds = ids => (key, sid) => {
+      const cat = categoryOf(key, ids(key).split(',')[sid]);
       return cat ? DECKS[key].find(i => i.label === cat) : null;
     };
+    const bySid = byIds(key => SHARE_IDS[key]);
+    const byMenuSid = byIds(key => LEGACY[key].ids);
     function shareUrl(sn) {
       const c = resolveSnap(sn);
       const st = stationChoices(c.line).findIndex(x => x.name === c.station.name && x.origin === c.station.origin && x.n === c.station.n);
@@ -2257,7 +2200,7 @@
     });
     load('data.js')
       // 좌표·경계가 없으면 지도만 빠지거나 바탕선 없이 그려지고, 뽑기는 그대로 됩니다.
-      .then(() => Promise.all([load('coords.js'), load('bounds.js'), load('photos.js'), load('near.js')].map(p => p.catch(() => {}))))
+      .then(() => Promise.all([load('coords.js'), load('bounds.js'), load('photos.js'), load('area.js')].map(p => p.catch(() => {}))))
       .then(start, () => {
         const lede = document.getElementById('lede');
         lede.textContent = '노선 데이터를 불러오지 못했습니다. 새로고침해 주세요.';
