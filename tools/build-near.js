@@ -1,4 +1,4 @@
-// 역마다 "걸어갈 만한 거리 안에 이 밥·디저트·놀거리가 있는지"를 미리 계산해 near.js로 씁니다.
+// 역마다 "걸어갈 만한 거리 안에 이 밥·디저트·놀거리 카테고리가 있는지"를 미리 계산해 near.js로 씁니다.
 // 자료: 소상공인시장진흥공단_상가(상권)정보 (공공데이터포털, 이용허락범위 제한 없음, 분기마다 갱신)
 //       https://www.data.go.kr/data/15083033/fileData.do  — zip을 풀면 시도별 CSV(UTF-8)가 나옵니다.
 //
@@ -6,11 +6,8 @@
 //   node tools/build-near.js <CSV가 든 폴더> <자료 기준일, 예: 2026-09-30>
 // 결과: 프로젝트 폴더의 near.js
 //
-// 판정: 역 좌표에서 반경 RADIUS m 안에
-//   - 상호로 확인되는 가게(규칙의 sure)가 1곳 이상이면 "있음"
-//   - 아니면 그 항목을 팔 만한 종류의 가게(규칙의 maybe, 짐작)가 GUESS_MIN곳 이상이면 "있음(짐작)"
-//     짐작으로만 있는 역에서는 지도를 그 가게 종류(규칙의 query)로 찾도록 표시해 둡니다.
-// 규칙이 없는 항목(공원 산책처럼 가게가 아닌 것)은 늘 "있음"으로 둡니다.
+// 판정: 역 좌표에서 반경 RADIUS m 안에 규칙(tools/near-rules.js)에 맞는 가게가 규칙의 min곳 이상이면 "있음"
+// 규칙이 없는 카테고리(공원처럼 가게가 아닌 것)는 늘 "있음"으로 둡니다.
 //
 // 지도 검색어 앞에 붙일 도시 이름(ar)도 여기서 같이 만듭니다(bounds.js의 시 도형으로 역이 어느 시에 있는지 봄).
 //   서울·수도권: 다른 지역에도 같은 이름이 있는 역만 (서울 시청역, 부천 중동역)
@@ -25,7 +22,6 @@ if (!csvDir || !asOf) { console.error('usage: node tools/build-near.js <csv dir>
 
 const RADIUS = 800;   // m. 걸어서 10분 남짓
 const WIDE = 1500;    // m. 근처에 마땅한 게 적은 역에서 쓰는 넓은 반경
-const GUESS_MIN = 2;  // 짐작만으로 "있음"이 되려면 이만큼의 가게가 있어야 합니다 (한 곳은 문을 닫았을 수도 있어서)
 
 // ---------- 사이트 자료(노선·역 좌표·항목·지도 도형) ----------
 const site = {};
@@ -101,30 +97,26 @@ for (const r of site.REGIONS) {
 }
 
 // ---------- 항목별 규칙 ----------
-// RULES[덱][항목 이름] = 가게 한 곳을 받아 맞으면 true를 돌려주는 함수, 또는 { sure, maybe, query } (near-rules.js 참고)
+// RULES[덱][카테고리] = { test: 가게 한 곳을 받아 맞으면 true, min: "있음"이 되는 가게 수 } (near-rules.js 참고)
 const RULES = require('./near-rules.js');
 
 // ---------- 계산 ----------
 const deckKeys = ['food', 'dessert', 'play'];
 const items = deckKeys.flatMap(k => site.DECKS[k].map(i => {
   const r = (RULES[k] || {})[i.label] || null;
-  return typeof r === 'function' || !r
-    ? { deck: k, label: i.label, sure: r, maybe: null, query: null }
-    : { deck: k, label: i.label, sure: r.sure, maybe: r.maybe, query: r.query };
+  return { deck: k, label: i.label, test: r ? r.test : null, min: r ? r.min : 0 };
 }));
-const missingRules = items.filter(i => !i.sure).map(i => `${i.deck}:${i.label}`);
-// 짐작 비트를 두는 항목 (밥, 디저트, 놀거리 순)
-const guessItems = items.filter(i => i.maybe);
+const missingRules = items.filter(i => !i.test).map(i => `${i.deck}:${i.label}`);
+const unknownRules = deckKeys.flatMap(k => Object.keys(RULES[k] || {}).filter(l => !site.DECKS[k].some(i => i.label === l)).map(l => `${k}:${l}`));
+if (unknownRules.length) { console.error('rules for unknown categories:', unknownRules.join(', ')); process.exit(1); }
 
 // 역을 가까운 칸으로 나눠 두고, 가게마다 근처 칸의 역만 봅니다.
 const CELL = 0.01; // 도 (약 1km)
 const grid = new Map();
 const cellKey = (lat, lon) => `${Math.floor(lat / CELL)},${Math.floor(lon / CELL)}`;
 for (const s of stations) {
-  s.count = new Uint16Array(items.length);  // 확인된 가게 수 (반경 RADIUS)
-  s.wide = new Uint16Array(items.length);   // 확인된 가게 수 (반경 WIDE)
-  s.mcount = new Uint16Array(items.length); // 짐작 가게 수 (반경 RADIUS)
-  s.mwide = new Uint16Array(items.length);  // 짐작 가게 수 (반경 WIDE)
+  s.count = new Uint16Array(items.length); // 규칙에 맞는 가게 수 (반경 RADIUS)
+  s.wide = new Uint16Array(items.length);  // 규칙에 맞는 가게 수 (반경 WIDE)
   const k = cellKey(s.lat, s.lon);
   if (!grid.has(k)) grid.set(k, []);
   grid.get(k).push(s);
@@ -194,16 +186,12 @@ async function readCsv(file, onRow) {
       };
       let any = false;
       items.forEach((it, idx) => {
-        if (!it.sure) return;
-        // 확인이 짐작보다 먼저: 상호로 확인되는 가게는 짐작으로 세지 않습니다.
-        const kind = it.sure(store) ? 'sure' : it.maybe && it.maybe(store) ? 'maybe' : null;
-        if (!kind) return;
+        if (!it.test || !it.test(store)) return;
         any = true;
         hits[idx]++;
-        const [c, w] = kind === 'sure' ? ['count', 'wide'] : ['mcount', 'mwide'];
         for (const [s, d] of near) {
-          if (s[w][idx] < 65535) s[w][idx]++;
-          if (d <= RADIUS && s[c][idx] < 65535) s[c][idx]++;
+          if (s.wide[idx] < 65535) s.wide[idx]++;
+          if (d <= RADIUS && s.count[idx] < 65535) s.count[idx]++;
         }
       });
       if (any) used++;
@@ -211,47 +199,38 @@ async function readCsv(file, onRow) {
     console.log('read', path.basename(f), 'rows so far', rows);
   }
 
-  // 역마다 비트로: 앞쪽은 food, dessert, play 순서의 항목 하나당 1비트 (있음 1),
-  // 뒤쪽은 guess 목록 순서로 1비트 (짐작으로만 있음 1 → 지도는 그 가게 종류로 찾기)
-  const nBits = items.length + guessItems.length;
-  const has = (it, idx, sure, maybe) => !it.sure || sure[idx] >= 1 || (!!it.maybe && maybe[idx] >= GUESS_MIN);
-  const encode = (sure, maybe) => {
-    const bytes = new Uint8Array(Math.ceil(nBits / 8));
-    const set = bit => { bytes[bit >> 3] |= 1 << (bit & 7); };
-    items.forEach((it, idx) => { if (has(it, idx, sure, maybe)) set(idx); });
-    guessItems.forEach((it, g) => {
-      const idx = items.indexOf(it);
-      if (sure[idx] < 1 && maybe[idx] >= GUESS_MIN) set(items.length + g);
-    });
+  // 역마다 비트로: food, dessert, play 순서의 카테고리 하나당 1비트 (있음 1)
+  const has = (it, idx, count) => !it.test || count[idx] >= it.min;
+  const encode = count => {
+    const bytes = new Uint8Array(Math.ceil(items.length / 8));
+    items.forEach((it, idx) => { if (has(it, idx, count)) bytes[idx >> 3] |= 1 << (idx & 7); });
     return Buffer.from(bytes).toString('base64').replace(/=+$/, '');
   };
   const st = {}, wd = {};
-  const perItem = new Uint32Array(items.length), perGuess = new Uint32Array(items.length);
+  const perItem = new Uint32Array(items.length), perWide = new Uint32Array(items.length);
   for (const s of stations) {
-    (st[s.region] = st[s.region] || {})[s.key] = encode(s.count, s.mcount);
-    (wd[s.region] = wd[s.region] || {})[s.key] = encode(s.wide, s.mwide);
+    (st[s.region] = st[s.region] || {})[s.key] = encode(s.count);
+    (wd[s.region] = wd[s.region] || {})[s.key] = encode(s.wide);
     items.forEach((it, idx) => {
-      if (has(it, idx, s.count, s.mcount)) perItem[idx]++;
-      if (it.maybe && s.count[idx] < 1 && s.mcount[idx] >= GUESS_MIN) perGuess[idx]++;
+      if (has(it, idx, s.count)) perItem[idx]++;
+      if (has(it, idx, s.wide)) perWide[idx]++;
     });
   }
   const labels = Object.fromEntries(deckKeys.map(k => [k, site.DECKS[k].map(i => i.label)]));
-  const guess = Object.fromEntries(deckKeys.map(k => [k, guessItems.filter(i => i.deck === k).map(i => [i.label, i.query])]));
   const text =
-    '// 역마다 걸어갈 만한 거리 안에 밥·디저트·놀거리가 있는지. tools/build-near.js로 만듭니다.\n' +
+    '// 역마다 걸어갈 만한 거리 안에 밥·디저트·놀거리 카테고리가 있는지. tools/build-near.js로 만듭니다.\n' +
     '// 자료: 소상공인시장진흥공단_상가(상권)정보 ' + asOf + ' 기준 (공공데이터포털, 이용허락범위 제한 없음)\n' +
-    '// items: 비트 순서(밥, 디저트, 놀거리 순). st: 반경 radius m, wd: 반경 wide m. 역 값은 비트를 base64로 (있음 1)\n' +
-    '// 규칙이 없는 항목(공원 산책 등)은 늘 1\n' +
-    '// guess: [항목, 지도 검색어]. items 비트 뒤에 이 순서로 "짐작으로만 있음" 비트가 붙습니다 (그 역에선 지도를 이 검색어로 찾기)\n' +
+    '// items: 비트 순서(밥, 디저트, 놀거리 순 카테고리). st: 반경 radius m, wd: 반경 wide m. 역 값은 비트를 base64로 (있음 1)\n' +
+    '// 규칙이 없는 카테고리(공원)는 늘 1\n' +
     '// ar: 지도 검색어 앞에 붙일 도시 이름 (서울 밖, 또는 다른 지역에 같은 이름이 있는 역)\n' +
-    'const NEAR = ' + JSON.stringify({ radius: RADIUS, wide: WIDE, asOf, items: labels, guess, st, wd, ar }) + ';\n';
+    'const NEAR = ' + JSON.stringify({ radius: RADIUS, wide: WIDE, asOf, items: labels, st, wd, ar }) + ';\n';
   fs.writeFileSync(path.join(ROOT, 'near.js'), text);
 
   console.log('rows', rows, 'matched stores near stations', used, 'stations', stations.length, 'bytes', Buffer.byteLength(text));
   console.log('no rule (always on):', missingRules.join(', ') || 'none');
   console.log('area prefixes:', Object.entries(ar).map(([r, o]) => `${r} ${Object.keys(o).length}`).join(', '));
   console.log('area from nearest city (outside shapes):', arOutside.join(', ') || 'none');
-  console.log('stations with item nearby (of ' + stations.length + '), of which by guess only:');
-  items.forEach((it, idx) => console.log(`  ${it.deck}:${it.label}`.padEnd(28), String(perItem[idx]).padStart(4),
-    it.maybe ? `guess ${String(perGuess[idx]).padStart(4)}` : '          ', it.sure ? `stores ${hits[idx]}` : '(always)'));
+  console.log('stations with category nearby (of ' + stations.length + '): ' + RADIUS + 'm / ' + WIDE + 'm');
+  items.forEach((it, idx) => console.log(`  ${it.deck}:${it.label}`.padEnd(24), String(perItem[idx]).padStart(4), String(perWide[idx]).padStart(4),
+    it.test ? `min ${it.min}  stores ${hits[idx]}` : '(always)'));
 })();

@@ -201,8 +201,9 @@
   }
   .item-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .item-body { display: grid; gap: 4px; padding: 14px 16px 16px; }
-  .item-cat { font-size: .85rem; font-weight: 600; color: var(--muted); }
   .item-name { font: 400 clamp(2rem, 9vw, 2.8rem)/1.1 var(--font-display); overflow-wrap: anywhere; }
+  /* 카테고리 아래 예시(삼겹살 · 소고기 · …). 돌아가는 동안엔 비워 두되 자리는 남겨, 멈출 때 카드가 덜컥 커지지 않게 */
+  .item-ex { min-height: 1.35em; font-size: .85rem; font-weight: 600; line-height: 1.35; color: var(--muted); }
   .item-card.is-rolling .item-name { color: var(--muted); }
   /* 사진 출처: 사진 오른쪽 아래에 작고 흐리게 */
   .item-credit {
@@ -498,8 +499,8 @@
         <small class="item-credit" id="item-credit" hidden></small>
       </div>
       <figcaption class="item-body">
-        <span class="item-cat" id="item-cat"></span>
         <strong class="item-name" id="item-name"></strong>
+        <span class="item-ex" id="item-ex"></span>
       </figcaption>
     </figure>
 
@@ -600,8 +601,9 @@
           }
         }
         for (const k of ['food', 'dessert', 'play']) {
-          if (DECKS[k].some(i => i.label === s[k])) state[k] = s[k];
-          if (s.offCat && Array.isArray(s.offCat[k])) state.offCat[k] = s.offCat[k].filter(c => DECKS[k].some(i => i.cat === c));
+          const cat = categoryOf(k, s[k]); // 메뉴별로 뽑던 때 저장된 것이면 그 메뉴가 든 카테고리로
+          if (cat) state[k] = cat;
+          if (s.offCat && Array.isArray(s.offCat[k])) state.offCat[k] = s.offCat[k].filter(c => DECKS[k].some(i => i.label === c));
         }
         if (Number.isInteger(s.step) && s.step >= 0 && s.step <= DONE) state.step = s.step;
         while (!reachable(state.step)) state.step--;
@@ -612,8 +614,8 @@
     const els = {
       progress: $('progress'), title: $('title'),
       sign: $('sign'), badge: $('badge'), name: $('sign-name'), band: $('band'),
-      signLink: $('sign-link'), itemLink: $('item-link'), itemLinkHint: document.querySelector('#item-link .card-link-hint'),
-      item: $('item-card'), itemImg: $('item-img'), itemCat: $('item-cat'), itemName: $('item-name'), itemCredit: $('item-credit'),
+      signLink: $('sign-link'), itemLink: $('item-link'),
+      item: $('item-card'), itemImg: $('item-img'), itemEx: $('item-ex'), itemName: $('item-name'), itemCredit: $('item-credit'),
       left: $('band-left'), order: $('order'), n: $('order-n'), right: $('band-right'),
       msg: $('msg'), course: $('course'),
       draw: $('draw'), next: $('next'), back: $('back'), share: $('share'), restart: $('restart'),
@@ -714,14 +716,11 @@
     }
     const thumbReady = src => { const im = thumbs.get(src); return !!im && im.complete && im.naturalWidth > 0; };
     function paintItem(key, item, spinning) {
-      els.itemCat.textContent = item ? item.cat : '';
+      els.itemEx.textContent = item && !spinning ? item.ex : '';
       setName(els.itemName, item ? item.label : '뽑는 중');
-      // 누르면 뽑힌 역 근처에서 이 항목을 네이버 지도로 찾습니다.
-      // 근처에 상호로 확인되는 가게가 없고 짐작뿐이면(빵집만 있는 휘낭시에 등) 그 가게 종류로 찾고, 안내에도 그렇게 적습니다.
-      const found = !spinning && item ? itemSearch(key, item) : null;
-      setCardLink(els.itemLink, found && found.query,
-        found && `${found.query} 네이버 지도에서 찾기${found.kind ? ` (${item.label} 파는 가게를 근처 ${found.kind}에서)` : ''}`);
-      els.itemLinkHint.textContent = found && found.kind ? `근처 ${found.kind} 보기 ↗` : '네이버 지도 ↗';
+      // 누르면 뽑힌 역 근처에서 이 카테고리를 네이버 지도로 찾습니다(예: 마들역 베이커리).
+      const query = !spinning && item ? itemQuery(item) : null;
+      setCardLink(els.itemLink, query, query && `${query} 네이버 지도에서 찾기`);
       const p = item ? photoOf(key, item.label) : null;
       if (spinning) {
         // 돌아가는 동안: 받아 둔 작은 사진으로 바꿉니다. 아직 못 받은 사진은 건너뛰고 앞의 사진을 그대로 둡니다.
@@ -867,10 +866,10 @@
       return null;
     };
     const chooserShown = () => !!chooserKind();
-    // 종류(카테고리)
-    const catsOf = key => [...new Set(DECKS[key].map(i => i.cat))];
+    // 카테고리 켜고 끄기 (꺼 둔 카테고리 이름을 state.offCat에)
+    const catsOf = key => DECKS[key].map(i => i.label);
     const offCats = key => new Set(state.offCat[key] || []);
-    const enabledItems = key => { const off = offCats(key); return DECKS[key].filter(i => !off.has(i.cat)); };
+    const enabledItems = key => { const off = offCats(key); return DECKS[key].filter(i => !off.has(i.label)); };
 
     // 역 근처에 있는 것만: near.js(공공 상가정보로 역마다 미리 계산한 표)를 봅니다.
     // 근처(radius) 후보가 NEAR_MIN개보다 적으면 넓은 반경(wide)으로, 그래도 적으면 전체에서 뽑습니다.
@@ -891,40 +890,20 @@
       return bitsCache.get(b64);
     }
     const bitOn = (bytes, bit) => ((bytes[bit >> 3] >> (bit & 7)) & 1) === 1;
-    const nearItemCount = () => NEAR.items.food.length + NEAR.items.dessert.length + NEAR.items.play.length;
     function isNear(key, item, bytes) {
       const i = NEAR.items[key] ? NEAR.items[key].indexOf(item.label) : -1;
-      if (i < 0) return true; // 표를 만든 뒤에 새로 넣은 항목
+      if (i < 0) return true; // 표를 만든 뒤에 새로 넣은 카테고리
       const before = { food: 0, dessert: NEAR.items.food.length, play: NEAR.items.food.length + NEAR.items.dessert.length }[key];
       return bitOn(bytes, before + i);
-    }
-    // 그 역 근처에 상호로 확인되는 가게는 없고, 그 항목을 팔 만한 종류의 가게만 있으면(짐작) 그 가게 종류 검색어를 돌려줍니다.
-    // 예: 마들역 휘낭시에 → 빵집만 있어서 '베이커리'. 비트는 items 뒤에 guess 순서로 붙어 있습니다.
-    function guessQuery(key, item, bytes) {
-      const G = NEAR.guess;
-      if (!G || !G[key]) return null;
-      const g = G[key].findIndex(([label]) => label === item.label);
-      if (g < 0) return null;
-      const before = { food: 0, dessert: G.food.length, play: G.food.length + G.dessert.length }[key];
-      return bitOn(bytes, nearItemCount() + before + g) ? G[key][g][1] : null;
     }
     // 지도 검색어의 역 부분. 서울 밖이거나 다른 지역에 같은 이름이 있는 역은 '대전 시청역'처럼 도시 이름을 붙입니다.
     function placeQuery(regionId, line, name) {
       const city = nearReady() && NEAR.ar ? stationEntry(NEAR.ar[regionId], line, name) : null;
       return (city ? city + ' ' : '') + stationQuery(name);
     }
-    // 항목 지도 검색: { query: '마들역 휘낭시에', kind: null } 또는 짐작이면 { query: '마들역 베이커리', kind: '베이커리' }
-    // 800m 안에서 확인되면 항목 이름으로, 800m 안엔 짐작뿐이면 그 가게 종류로, 800m 안에 없으면 1.5km 표를 같은 방식으로 봅니다.
-    function itemSearch(key, item, regionId = state.region, line = curLine(), name = state.station && state.station.name) {
-      const where = name ? placeQuery(regionId, line, name) + ' ' : '';
-      let kind = null;
-      for (const which of ['st', 'wd']) {
-        const bytes = name ? stationBits(which, regionId, line, name) : null;
-        if (!bytes || !isNear(key, item, bytes)) continue;
-        kind = guessQuery(key, item, bytes);
-        break;
-      }
-      return { query: where + (kind || item.q), kind };
+    // 카테고리 지도 검색어: '마들역 베이커리', '대전 시청역 고깃집'
+    function itemQuery(item, regionId = state.region, line = curLine(), name = state.station && state.station.name) {
+      return (name ? placeQuery(regionId, line, name) + ' ' : '') + item.q;
     }
     // { pool: 뽑을 후보, scope: 'near' | 'wide' | 'all', known: 근처 자료가 있는지 }
     function nearFilter(key, items) {
@@ -938,12 +917,6 @@
       return { pool: items, scope: 'all', known: true };
     }
     const meters = m => (m >= 1000 ? `${m / 1000}km` : `${m}m`);
-    // '베이커리로', '떡집으로' (받침이 없거나 ㄹ이면 '로')
-    const withRo = w => {
-      const c = w.charCodeAt(w.length - 1) - 0xac00;
-      const jong = c >= 0 && c < 11172 ? c % 28 : 0;
-      return w + (jong && jong !== 8 ? '으로' : '로');
-    };
 
     /* ---------- 이름 릴: 슬롯머신처럼 새 이름이 아래에서 밀려 올라옵니다 ---------- */
 
@@ -1588,13 +1561,13 @@
 
     /* ---------- 밥·디저트·놀거리 종류 고르기 ---------- */
 
-    // 종류만 보여 줍니다(세부 항목은 뽑을 때 나오는 재미로 남겨 둠). 역 근처에 그 종류가 하나도 없으면 흐리게.
+    // 카테고리마다 켜고 끌 수 있습니다. 역 근처에 없는 카테고리는 흐리게.
     function renderCats() {
       const key = STEPS[state.step].key;
       const off = offCats(key);
       const cats = catsOf(key);
       els.catTitle.textContent = `뽑을 ${STEPS[state.step].short} 종류`;
-      els.catCount.textContent = `${cats.length}종류 중 ${cats.length - cats.filter(c => off.has(c)).length}종류 선택`;
+      els.catCount.textContent = `${cats.length}종류 중 ${cats.filter(c => !off.has(c)).length}종류 선택`;
       // 역 근처 안내: 선택한 것 중 근처에 있는 몇 개에서 뽑는지
       const nf = nearFilter(key, enabledItems(key));
       const nearAll = nf.known ? new Set(nearFilter(key, DECKS[key]).pool.map(i => i.label)) : null;
@@ -1608,8 +1581,7 @@
         else els.catNear.replaceChildren(`${where} 근처에 마땅한 곳이 적어서 선택한 `, n, ' 전부에서 뽑아요');
       }
       els.catList.replaceChildren(...cats.map(cat => {
-        const items = DECKS[key].filter(i => i.cat === cat);
-        const none = !!nearAll && !items.some(i => nearAll.has(i.label));
+        const none = !!nearAll && !nearAll.has(cat);
         const li = make('li', 'cat-row' + (off.has(cat) ? ' is-off' : '') + (none ? ' is-none' : ''));
         const b = make('button', 'cat', cat);
         if (none) b.title = `${where} 근처에 없어요`;
@@ -1659,7 +1631,8 @@
         || all.find(c => c.name === sn.station.name);
       const items = {};
       for (const k of ['food', 'dessert', 'play']) {
-        items[k] = DECKS[k].find(i => i.label === sn[k]);
+        const cat = categoryOf(k, sn[k]); // 메뉴별로 뽑던 때의 코스는 그 메뉴가 든 카테고리로
+        items[k] = cat && DECKS[k].find(i => i.label === cat);
         if (!items[k]) return null;
       }
       return st ? { region: reg, line, station: st, ...items } : null;
@@ -1671,26 +1644,32 @@
     const loadRecent = () => { const sn = store.get(LAST_KEY); return resolveSnap(sn) ? sn : null; };
 
     // 공유 링크: 받은 사람도 같은 코스 화면으로 열립니다.
-    // 주소는 메시지에 그대로 보이므로 짧게: ?c=호선-역-밥-디저트-놀거리 (호선은 ID, 역은 순번, 나머지는 항목 번호)
-    // 항목 번호(sid)는 data.js의 SHARE_IDS에서 한 번 정하면 바뀌지 않아서, 목록을 고쳐도 예전 링크가 그대로 열립니다.
+    // 주소는 메시지에 그대로 보이므로 짧게: ?k=호선-역-밥-디저트-놀거리 (호선은 ID, 역은 순번, 나머지는 카테고리 번호)
+    // 카테고리 번호(sid)는 data.js의 SHARE_IDS에서 한 번 정하면 바뀌지 않아서, 목록을 고쳐도 예전 링크가 그대로 열립니다.
+    // 메뉴별로 뽑던 때의 링크(?c=…, 번호는 그때의 메뉴 번호)는 그 메뉴가 든 카테고리로 엽니다.
     const bySid = (key, sid) => DECKS[key].find(i => i.sid === sid);
+    const byMenuSid = (key, sid) => {
+      const cat = categoryOf(key, LEGACY[key].ids.split(',')[sid]);
+      return cat ? DECKS[key].find(i => i.label === cat) : null;
+    };
     function shareUrl(sn) {
       const c = resolveSnap(sn);
       const st = stationChoices(c.line).findIndex(x => x.name === c.station.name && x.origin === c.station.origin && x.n === c.station.n);
       const code = [c.line.id, st, c.food.sid, c.dessert.sid, c.play.sid].join('-');
-      return new URL(location.pathname, location.origin) + '?c=' + code;
+      return new URL(location.pathname, location.origin) + '?k=' + code;
     }
     function snapFromUrl() {
       const p = new URLSearchParams(location.search);
-      const code = p.get('c');
+      const code = p.get('k') || p.get('c');
       if (code) {
+        const find = p.get('k') ? bySid : byMenuSid;
         const [lineId, ...rest] = code.split('-');
         if (rest.length !== 4 || rest.some(v => !/^\d+$/.test(v))) return null;
         const [si, fi, di, pi] = rest.map(Number);
         const reg = REGIONS.find(r => r.lines.some(l => l.id === lineId));
         const line = reg && reg.lines.find(l => l.id === lineId);
         const st = line && stationChoices(line)[si];
-        const food = bySid('food', fi), dessert = bySid('dessert', di), play = bySid('play', pi);
+        const food = find('food', fi), dessert = find('dessert', di), play = find('play', pi);
         if (!st || !food || !dessert || !play) return null;
         const sn = {
           region: reg.id, line: line.id, station: { name: st.name, origin: st.origin, n: st.n },
@@ -1726,10 +1705,8 @@
       ];
       for (const k of ['food', 'dessert', 'play']) {
         const item = c[k];
-        // 짐작으로만 있는 항목은 그 가게 종류로 찾고, 옆 작은 글씨에 '근처 베이커리로 찾기'처럼 적습니다.
-        const found = itemSearch(k, item, c.region.id, line, s.name);
-        rows.push(row(STEPS.find(x => x.key === k).short, mapLink(item.label, found.query),
-          make('small', null, found.kind ? `${item.cat} · 근처 ${withRo(found.kind)} 찾기` : item.cat)));
+        rows.push(row(STEPS.find(x => x.key === k).short, mapLink(item.label, itemQuery(item, c.region.id, line, s.name)),
+          make('small', null, item.ex)));
       }
       els.course.replaceChildren(...rows);
     }
